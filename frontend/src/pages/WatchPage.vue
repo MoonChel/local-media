@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import videojs from 'video.js/dist/video.es.js'
+import videojs from 'video.js'
 import 'video.js/dist/video-js.css'
 import 'videojs-seek-buttons/dist/videojs-seek-buttons.css'
 import 'videojs-seek-buttons'
@@ -13,11 +13,8 @@ const playerEl = ref(null)
 const player = ref(null)
 const details = ref(null)
 const error = ref('')
-const castMessage = ref('')
-const castSupported = ref(true)
 const seekTime = ref(10)
 let progressTimer = null
-let castInitPromise = null
 let lastSavedPosition = 0
 
 function mimeTypeFromPath(path) {
@@ -29,102 +26,6 @@ function mimeTypeFromPath(path) {
   if (p.endsWith('.mkv')) return 'video/x-matroska'
   if (p.endsWith('.avi')) return 'video/x-msvideo'
   return 'video/mp4'
-}
-
-function loadCastSdk() {
-  if (window.cast?.framework && window.chrome?.cast) {
-    return Promise.resolve(true)
-  }
-  if (castInitPromise) return castInitPromise
-
-  castInitPromise = new Promise((resolve) => {
-    const timeout = setTimeout(() => resolve(false), 8000)
-
-    window.__onGCastApiAvailable = (isAvailable) => {
-      clearTimeout(timeout)
-      if (!isAvailable || !window.cast?.framework || !window.chrome?.cast) {
-        resolve(false)
-        return
-      }
-      try {
-        const context = window.cast.framework.CastContext.getInstance()
-        context.setOptions({
-          receiverApplicationId: window.chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
-          autoJoinPolicy: window.chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
-        })
-      } catch {
-        resolve(false)
-        return
-      }
-      resolve(true)
-    }
-
-    const existing = document.querySelector('script[data-gcast-sdk="1"]')
-    if (!existing) {
-      const script = document.createElement('script')
-      script.src = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1'
-      script.async = true
-      script.defer = true
-      script.dataset.gcastSdk = '1'
-      document.head.appendChild(script)
-    }
-  })
-
-  return castInitPromise
-}
-
-async function requestCast() {
-  const videoEl = playerEl.value
-  if (!videoEl || !details.value) return
-  castMessage.value = ''
-
-  try {
-    if (typeof videoEl.webkitShowPlaybackTargetPicker === 'function') {
-      videoEl.webkitShowPlaybackTargetPicker()
-      castMessage.value = 'AirPlay picker opened. Select a device.'
-      return
-    }
-
-    const host = window.location.hostname
-    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
-      castMessage.value = 'Use LAN IP (not localhost). TV cannot access localhost stream URLs.'
-      return
-    }
-
-    const sdkReady = await loadCastSdk()
-    if (!sdkReady) {
-      castMessage.value = 'Cast SDK unavailable in this browser/session.'
-      return
-    }
-
-    const context = window.cast.framework.CastContext.getInstance()
-    await context.requestSession()
-
-    const session = context.getCurrentSession()
-    if (!session) {
-      castMessage.value = 'No cast session selected.'
-      return
-    }
-
-    const mediaUrl = new URL(details.value.stream_url, window.location.origin).href
-    const mediaInfo = new window.chrome.cast.media.MediaInfo(mediaUrl, 'video/mp4')
-    const metadata = new window.chrome.cast.media.GenericMediaMetadata()
-    metadata.title = details.value.title
-    mediaInfo.metadata = metadata
-
-    const request = new window.chrome.cast.media.LoadRequest(mediaInfo)
-    request.autoplay = true
-    request.currentTime = Number(player.value?.currentTime() || 0)
-
-    await session.loadMedia(request)
-    castMessage.value = 'Cast started.'
-  } catch (e) {
-    if (e?.name === 'NotAllowedError' || e?.code === 'cancel') {
-      castMessage.value = 'Cast canceled (no device selected).'
-      return
-    }
-    castMessage.value = String(e)
-  }
 }
 
 async function loadVideo() {
@@ -149,8 +50,6 @@ async function loadVideo() {
     if (!playerEl.value) {
       throw new Error('Player element is not ready')
     }
-    castSupported.value = true
-    castMessage.value = ''
 
     if (player.value) player.value.dispose()
 
@@ -159,6 +58,20 @@ async function loadVideo() {
       fluid: true,
       preload: 'auto',
       playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
+      controlBar: {
+        children: [
+          'playToggle',
+          'volumePanel',
+          'currentTimeDisplay',
+          'timeDivider',
+          'durationDisplay',
+          'progressControl',
+          'remainingTimeDisplay',
+          'playbackRateMenuButton',
+          'pictureInPictureToggle',
+          'fullscreenToggle'
+        ]
+      }
     })
 
     player.value.src({
@@ -223,23 +136,15 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="mx-auto max-w-6xl p-4 md:p-8">
-    <div class="mb-4 flex items-center justify-between">
+    <div class="mb-4">
       <RouterLink to="/" class="text-sm text-orange-300 hover:underline">← Back to library</RouterLink>
-      <button
-        v-if="castSupported"
-        @click="requestCast"
-        class="rounded border border-white/20 px-3 py-1.5 text-sm"
-      >
-        Cast
-      </button>
     </div>
 
     <div v-if="error" class="rounded border border-red-500/60 bg-red-950/30 p-3 text-red-300">{{ error }}</div>
     <div v-else-if="details" class="space-y-3">
       <h2 class="text-2xl font-semibold">{{ details.title }}</h2>
       <p class="text-xs text-muted">{{ details.source_label || details.source_id }} • {{ details.rel_path }}</p>
-      <p v-if="castMessage" class="text-xs text-orange-300">{{ castMessage }}</p>
-      <video ref="playerEl" class="video-js vjs-big-play-centered w-full rounded-lg border border-white/10 bg-black"></video>
+      <video ref="playerEl" class="video-js vjs-big-play-centered w-full rounded-lg border border-white/10 bg-black mb-8"></video>
     </div>
   </main>
 </template>

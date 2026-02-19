@@ -13,4 +13,5 @@ export default defineConfig({
       '/api': 'http://backend:8080',
     },
   },
+  assetsInclude: ['**/*.woff', '**/*.woff2', '**/*.ttf', '**/*.eot'],
 })
