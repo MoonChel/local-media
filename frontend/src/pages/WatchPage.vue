@@ -1,13 +1,15 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import videojs from 'video.js'
 import 'video.js/dist/video-js.css'
 import 'videojs-seek-buttons/dist/videojs-seek-buttons.css'
 import 'videojs-seek-buttons'
 import 'videojs-hotkeys'
+import Breadcrumbs from '../components/Breadcrumbs.vue'
 
 const route = useRoute()
+const router = useRouter()
 const videoId = computed(() => route.params.videoId)
 const playerEl = ref(null)
 const player = ref(null)
@@ -16,6 +18,42 @@ const error = ref('')
 const seekTime = ref(10)
 let progressTimer = null
 let lastSavedPosition = 0
+
+const breadcrumbs = computed(() => {
+  if (!details.value) return []
+  const path = details.value.rel_path || ''
+  const parts = path.split('/').filter(Boolean)
+  parts.pop() // Remove filename
+  
+  const crumbs = []
+  let currentPath = ''
+  
+  for (const part of parts) {
+    currentPath = currentPath ? `${currentPath}/${part}` : part
+    crumbs.push({
+      source: details.value.source_id,
+      path: currentPath,
+      label: part
+    })
+  }
+  
+  return crumbs
+})
+
+const canGoUp = computed(() => breadcrumbs.value.length > 0)
+
+function goUp() {
+  if (breadcrumbs.value.length === 0) {
+    router.push('/')
+  } else {
+    const parent = breadcrumbs.value[breadcrumbs.value.length - 1]
+    router.push(`/?source=${parent.source}&path=${encodeURIComponent(parent.path)}`)
+  }
+}
+
+function navigateTo(crumb) {
+  router.push(`/?source=${crumb.source}&path=${encodeURIComponent(crumb.path)}`)
+}
 
 function mimeTypeFromPath(path) {
   const p = String(path || '').toLowerCase()
@@ -138,9 +176,14 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="mx-auto max-w-6xl p-4 md:p-8">
-    <div class="mb-4">
-      <RouterLink to="/" class="text-sm text-orange-300 hover:underline">← Back to library</RouterLink>
-    </div>
+    <Breadcrumbs 
+      v-if="details"
+      :breadcrumbs="breadcrumbs" 
+      :canGoUp="canGoUp"
+      :showDragHint="false"
+      @goUp="goUp"
+      @navigate="navigateTo"
+    />
 
     <div v-if="error" class="rounded border border-red-500/60 bg-red-950/30 p-3 text-red-300">{{ error }}</div>
     <div v-else-if="details" class="space-y-3">
