@@ -1,9 +1,9 @@
-FROM node:22-slim AS ui-build
+FROM oven/bun:1-alpine AS ui-build
 WORKDIR /app/frontend
-COPY frontend/package*.json ./
-RUN npm ci
+COPY frontend/package.json frontend/bun.lock ./
+RUN bun install --frozen-lockfile
 COPY frontend/ ./
-RUN npm run build
+RUN bun run build
 
 FROM python:3.12-slim AS app
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -11,15 +11,22 @@ ENV PYTHONUNBUFFERED=1
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libboost-system-dev \
     libboost-python-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Install uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.cargo/bin:$PATH"
+
+# Install Python dependencies
 COPY backend/requirements.txt /app/backend/requirements.txt
-RUN pip install --no-cache-dir -r /app/backend/requirements.txt && \
-    pip install --no-cache-dir libtorrent yt-dlp
+RUN uv pip install --system --no-cache -r /app/backend/requirements.txt && \
+    uv pip install --system --no-cache libtorrent yt-dlp
 
 COPY backend /app/backend
 COPY --from=ui-build /app/frontend/dist /app/frontend/dist
