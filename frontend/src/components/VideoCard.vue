@@ -29,13 +29,13 @@ function stopPreview(event) {
     class="rounded-md border border-white/10 bg-black/15 p-3 text-left hover:border-white/25 relative group overflow-hidden flex flex-col h-full"
   >
     <div class="flex-1 flex flex-col min-w-0">
-      <div class="mb-2 h-32 w-full rounded bg-black overflow-hidden flex-shrink-0">
+      <div class="mb-2 aspect-video w-full rounded bg-black overflow-hidden flex-shrink-0">
         <video
           :src="video.stream_url"
           muted
           playsinline
           preload="metadata"
-          class="h-full w-full object-cover"
+          class="h-full w-full object-contain"
           @mouseenter="playPreview"
           @mouseleave="stopPreview"
         ></video>

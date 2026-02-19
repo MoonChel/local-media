@@ -56,6 +56,8 @@ async function loadVideo() {
     player.value = videojs(playerEl.value, {
       controls: true,
       fluid: true,
+      responsive: true,
+      aspectRatio: '16:9',
       preload: 'auto',
       playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
       controlBar: {
