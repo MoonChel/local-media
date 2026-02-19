@@ -1,7 +1,7 @@
 FROM oven/bun:1-debian AS ui-build
 WORKDIR /app/frontend
-COPY frontend/package.json frontend/bun.lock ./
-RUN bun install --frozen-lockfile
+COPY frontend/package.json frontend/package-lock.json ./
+RUN bun install
 COPY frontend/ ./
 RUN bun run build
 
@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.cargo/bin:$PATH"
+ENV PATH="/root/.local/bin:$PATH"
 
 # Install Python dependencies
 COPY backend/requirements.txt /app/backend/requirements.txt
