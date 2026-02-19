@@ -26,10 +26,10 @@ function stopPreview(event) {
 <template>
   <button
     @click="emit('play', video.id)"
-    class="rounded-md border border-white/10 bg-black/15 p-3 text-left hover:border-white/25 relative group overflow-hidden"
+    class="rounded-md border border-white/10 bg-black/15 p-3 text-left hover:border-white/25 relative group overflow-hidden flex flex-col h-full"
   >
-    <div class="min-w-0">
-      <div class="mb-2 h-32 w-full rounded bg-black overflow-hidden">
+    <div class="flex-1 flex flex-col min-w-0">
+      <div class="mb-2 h-32 w-full rounded bg-black overflow-hidden flex-shrink-0">
         <video
           :src="video.stream_url"
           muted
@@ -40,7 +40,7 @@ function stopPreview(event) {
           @mouseleave="stopPreview"
         ></video>
       </div>
-      <p class="text-sm font-semibold text-gray-200 line-clamp-2">{{ video.title }}</p>
+      <p class="text-sm font-semibold text-gray-200 line-clamp-2 min-h-[2.5rem]">{{ video.title }}</p>
     </div>
     <div class="absolute top-2 right-2 hidden group-hover:flex gap-1">
       <button @click.stop="emit('move', video)" class="rounded bg-blue-600 px-2 py-1 text-xs text-white" title="Move">Move</button>
