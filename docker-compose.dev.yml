@@ -1,0 +1,29 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.dev
+    container_name: video-player-backend-dev
+    environment:
+      - APP_CONFIG=/config/config.yaml
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend:/app/backend
+      - ./config:/config
+      - ./media:/media
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile.dev
+    container_name: video-player-frontend-dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app/frontend
+      - /app/frontend/node_modules
+    depends_on:
+      - backend
+    restart: unless-stopped

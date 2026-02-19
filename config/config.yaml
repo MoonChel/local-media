@@ -1,0 +1,20 @@
+library:
+  sources:
+  - id: movies
+    label: Movies
+    path: /media/movies
+  - id: shows
+    label: Shows
+    path: /media/shows
+  - id: videos
+    label: Videos
+    path: /media/videos
+  extensions:
+  - .mp4
+  - .mkv
+  - .avi
+  - .mov
+  - .webm
+  scan_interval_seconds: 21600
+player:
+  seek_time: 5
