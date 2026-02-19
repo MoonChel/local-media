@@ -40,7 +40,7 @@ function stopPreview(event) {
           @mouseleave="stopPreview"
         ></video>
       </div>
-      <p class="truncate text-sm font-semibold text-gray-200">{{ video.title }}</p>
+      <p class="text-sm font-semibold text-gray-200 line-clamp-2">{{ video.title }}</p>
     </div>
     <div class="absolute top-2 right-2 hidden group-hover:flex gap-1">
       <button @click.stop="emit('move', video)" class="rounded bg-blue-600 px-2 py-1 text-xs text-white" title="Move">Move</button>
