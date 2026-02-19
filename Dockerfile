@@ -1,4 +1,4 @@
-FROM oven/bun:1-alpine AS ui-build
+FROM oven/bun:1-debian AS ui-build
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/bun.lock ./
 RUN bun install --frozen-lockfile
