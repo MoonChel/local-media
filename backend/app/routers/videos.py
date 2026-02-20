@@ -61,8 +61,10 @@ def put_progress(video_id: str, payload: ProgressPayload, index: LibraryIndex = 
 
 
 @router.get("/stream/{video_id}")
-def stream_video(video_id: str, index: LibraryIndex = Depends(get_index)):
+async def stream_video(video_id: str, index: LibraryIndex = Depends(get_index)):
     import logging
+    from ..transcoding import needs_transcoding, create_transcode_response
+    
     logger = logging.getLogger(__name__)
     logger.info(f"Stream request for video_id: {video_id} (type: {type(video_id)})")
     
@@ -83,6 +85,12 @@ def stream_video(video_id: str, index: LibraryIndex = Depends(get_index)):
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="File missing")
 
+    # Check if transcoding is needed
+    if needs_transcoding(file_path):
+        logger.info(f"Transcoding {file_path.name} on-the-fly")
+        return create_transcode_response(file_path)
+    
+    # Direct file response for supported formats
     return FileResponse(path=file_path, filename=file_path.name)
 
 
