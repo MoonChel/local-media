@@ -57,12 +57,14 @@ function navigateTo(crumb) {
 
 function mimeTypeFromPath(path) {
   const p = String(path || '').toLowerCase()
-  if (p.endsWith('.mp4') || p.endsWith('.m4v')) return 'video/mp4'
+  // Files that will be transcoded to MP4 on the backend
+  if (p.endsWith('.mkv') || p.endsWith('.avi') || p.endsWith('.wmv') || 
+      p.endsWith('.flv') || p.endsWith('.mov') || p.endsWith('.m4v')) {
+    return 'video/mp4'  // Backend transcodes these to MP4
+  }
+  if (p.endsWith('.mp4')) return 'video/mp4'
   if (p.endsWith('.webm')) return 'video/webm'
   if (p.endsWith('.ogg') || p.endsWith('.ogv')) return 'video/ogg'
-  if (p.endsWith('.mov')) return 'video/quicktime'
-  if (p.endsWith('.mkv')) return 'video/x-matroska'
-  if (p.endsWith('.avi')) return 'video/x-msvideo'
   return 'video/mp4'
 }
 

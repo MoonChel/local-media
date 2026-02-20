@@ -66,7 +66,7 @@ async def stream_video(video_id: str, index: LibraryIndex = Depends(get_index)):
     from backend.app.modules.library.transcoding import needs_transcoding, create_transcode_response
     
     logger = logging.getLogger(__name__)
-    logger.info(f"Stream request for video_id: {video_id} (type: {type(video_id)})")
+    logger.info(f"Stream request for video_id: {video_id}")
     
     if not video_id or not isinstance(video_id, str):
         logger.error(f"Invalid video_id: {video_id}")
@@ -79,18 +79,21 @@ async def stream_video(video_id: str, index: LibraryIndex = Depends(get_index)):
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
     if not video:
+        logger.error(f"Video not found: {video_id}")
         raise HTTPException(status_code=404, detail="Video not found")
 
     file_path = Path(video["abs_path"])
     if not file_path.exists() or not file_path.is_file():
+        logger.error(f"File missing: {file_path}")
         raise HTTPException(status_code=404, detail="File missing")
 
     # Check if transcoding is needed
     if needs_transcoding(file_path):
-        logger.info(f"Transcoding {file_path.name} on-the-fly")
+        logger.info(f"Transcoding {file_path.name} on-the-fly (format: {file_path.suffix})")
         return create_transcode_response(file_path)
     
     # Direct file response for supported formats
+    logger.info(f"Direct streaming {file_path.name} (format: {file_path.suffix})")
     return FileResponse(path=file_path, filename=file_path.name)
 
 
