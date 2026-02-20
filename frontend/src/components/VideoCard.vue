@@ -19,7 +19,15 @@ const emit = defineEmits(['play', 'move', 'delete', 'toggleSelect'])
 function playPreview(event) {
   const el = event.currentTarget
   if (!(el instanceof HTMLVideoElement)) return
-  el.currentTime = 5  // Start from 5 seconds
+  
+  // Wait for metadata to load to get duration
+  if (el.duration && !isNaN(el.duration)) {
+    el.currentTime = el.duration * 0.2  // Start at 20% of video duration
+  } else {
+    // Fallback to 5 seconds if duration not available yet
+    el.currentTime = 5
+  }
+  
   el.play().catch(() => {})
 }
 
@@ -27,7 +35,13 @@ function stopPreview(event) {
   const el = event.currentTarget
   if (!(el instanceof HTMLVideoElement)) return
   el.pause()
-  el.currentTime = 5  // Reset to 5 seconds
+  
+  // Reset to 20% position
+  if (el.duration && !isNaN(el.duration)) {
+    el.currentTime = el.duration * 0.2
+  } else {
+    el.currentTime = 5
+  }
 }
 
 function handleClick(event) {
