@@ -47,12 +47,20 @@ class DownloadsConfig:
 
 
 @dataclass
+class ModulesConfig:
+    torrents: bool = True
+    youtube: bool = True
+    pastebin: bool = True
+
+
+@dataclass
 class AppConfig:
     auth: AuthConfig
     library: LibraryConfig
     watcher: WatcherConfig
     state: StateConfig
     downloads: DownloadsConfig
+    modules: ModulesConfig
 
 
 def get_config_path() -> Path:
@@ -116,6 +124,14 @@ def load_config() -> AppConfig:
         enabled=True,
         torrent_staging_dir="/config/torrents",
     )
+    
+    # Modules configuration
+    modules_raw = raw.get("modules") or {}
+    modules = ModulesConfig(
+        torrents=bool(modules_raw.get("torrents", True)),
+        youtube=bool(modules_raw.get("youtube", True)),
+        pastebin=bool(modules_raw.get("pastebin", True)),
+    )
 
     # Allow environment variable overrides for auth
     auth.enabled = _env_bool("AUTH_ENABLED", auth.enabled)
@@ -128,4 +144,5 @@ def load_config() -> AppConfig:
         watcher=watcher,
         state=state,
         downloads=downloads,
+        modules=modules,
     )

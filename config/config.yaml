@@ -16,5 +16,11 @@ library:
   - .mov
   - .webm
   scan_interval_seconds: 21600
+
 player:
   seek_time: 5
+
+modules:
+  torrents: true
+  youtube: true
+  pastebin: true

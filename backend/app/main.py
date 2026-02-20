@@ -12,13 +12,17 @@ from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 
-from .config import get_config_path, load_config
-from .db import get_engine, get_session_maker, init_db
-from .library import LibraryIndex, ScanScheduler, run_file_watcher, run_periodic_scan
-from .routers import pastebin, settings, torrents, videos, youtube
-from .settings import SettingsStore
-from .torrents import TorrentManager
-from .youtube import YouTubeDownloadManager
+from .core.config import get_config_path, load_config
+from .core.db import get_engine, get_session_maker, init_db
+from .modules.library.service import LibraryIndex, ScanScheduler, run_file_watcher, run_periodic_scan
+from .modules.library import router as library_router
+from .modules.settings.service import SettingsStore
+from .modules.settings import router as settings_router
+from .modules.torrents.service import TorrentManager
+from .modules.torrents import router as torrents_router
+from .modules.youtube.service import YouTubeDownloadManager
+from .modules.youtube import router as youtube_router
+from .modules.pastebin import router as pastebin_router
 
 # Configure logging
 logging.basicConfig(
@@ -32,7 +36,7 @@ security = HTTPBasic(auto_error=False)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from .transcoding import check_ffmpeg
+    from .modules.library.transcoding import check_ffmpeg
     
     logger.info("Starting Video Player application...")
     config = load_config()
@@ -90,12 +94,36 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Video Player", lifespan=lifespan)
 
-# Include routers
-app.include_router(videos.router)
-app.include_router(torrents.router)
-app.include_router(youtube.router)
-app.include_router(settings.router)
-app.include_router(pastebin.router)
+# Include core routers (always enabled)
+app.include_router(library_router.router)
+app.include_router(settings_router.router)
+
+# Include optional module routers (conditionally registered on first request)
+# We'll register them dynamically based on config
+
+
+@app.on_event("startup")
+async def register_module_routers():
+    """Register module routers based on configuration."""
+    config = load_config()
+    
+    if config.modules.torrents:
+        logger.info("Torrents module enabled")
+        app.include_router(torrents_router.router)
+    else:
+        logger.info("Torrents module disabled")
+    
+    if config.modules.youtube:
+        logger.info("YouTube module enabled")
+        app.include_router(youtube_router.router)
+    else:
+        logger.info("YouTube module disabled")
+    
+    if config.modules.pastebin:
+        logger.info("Pastebin module enabled")
+        app.include_router(pastebin_router.router)
+    else:
+        logger.info("Pastebin module disabled")
 
 
 def require_auth(request: Request, credentials: Optional[HTTPBasicCredentials] = Depends(security)):
@@ -114,6 +142,17 @@ def require_auth(request: Request, credentials: Optional[HTTPBasicCredentials] =
 @app.get("/api/health")
 def health():
     return {"ok": True}
+
+
+@app.get("/api/modules")
+def get_enabled_modules(request: Request):
+    """Return which modules are enabled."""
+    config = request.app.state.config
+    return {
+        "torrents": config.modules.torrents,
+        "youtube": config.modules.youtube,
+        "pastebin": config.modules.pastebin,
+    }
 
 
 @app.get("/api/sources")

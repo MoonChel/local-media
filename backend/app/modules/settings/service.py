@@ -6,7 +6,7 @@ from threading import Lock
 
 import yaml
 
-from .config import MediaSource
+from backend.app.core.config import MediaSource
 
 
 class SettingsStore:

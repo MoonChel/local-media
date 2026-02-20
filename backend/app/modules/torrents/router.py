@@ -3,8 +3,8 @@ import logging
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from ..dependencies import get_torrents, require_auth
-from ..torrents import TorrentManager, save_uploaded_torrent
+from backend.app.core.dependencies import get_torrents, require_auth
+from backend.app.modules.torrents.service import TorrentManager, save_uploaded_torrent
 
 router = APIRouter(prefix="/api/torrents", tags=["torrents"], dependencies=[Depends(require_auth)])
 logger = logging.getLogger(__name__)

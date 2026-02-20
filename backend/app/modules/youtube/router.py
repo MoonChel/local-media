@@ -3,8 +3,8 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from ..dependencies import get_youtube, require_auth
-from ..youtube import YouTubeDownloadManager
+from backend.app.core.dependencies import get_youtube, require_auth
+from backend.app.modules.youtube.service import YouTubeDownloadManager
 
 router = APIRouter(prefix="/api/youtube", tags=["youtube"], dependencies=[Depends(require_auth)])
 logger = logging.getLogger(__name__)

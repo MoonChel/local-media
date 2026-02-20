@@ -13,9 +13,9 @@ except ImportError:
 
 from slugify import slugify
 from sqlalchemy.orm import Session
-from .config import AppConfig
-from .library import ScanScheduler
-from .models import YouTubeDownload
+from backend.app.core.config import AppConfig
+from backend.app.modules.library.service import ScanScheduler
+from backend.app.core.models import YouTubeDownload
 
 logger = logging.getLogger(__name__)
 

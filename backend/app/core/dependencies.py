@@ -1,14 +1,15 @@
 """Shared dependencies for FastAPI routers"""
 import secrets
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
-from .library import LibraryIndex
-from .settings import SettingsStore
-from .torrents import TorrentManager
-from .youtube import YouTubeDownloadManager
+if TYPE_CHECKING:
+    from backend.app.modules.library.service import LibraryIndex
+    from backend.app.modules.settings.service import SettingsStore
+    from backend.app.modules.torrents.service import TorrentManager
+    from backend.app.modules.youtube.service import YouTubeDownloadManager
 
 security = HTTPBasic(auto_error=False)
 
@@ -26,17 +27,17 @@ def require_auth(request: Request, credentials: Optional[HTTPBasicCredentials] =
     return True
 
 
-def get_index(request: Request) -> LibraryIndex:
+def get_index(request: Request):
     return request.app.state.index
 
 
-def get_torrents(request: Request) -> TorrentManager:
+def get_torrents(request: Request):
     return request.app.state.torrents
 
 
-def get_youtube(request: Request) -> YouTubeDownloadManager:
+def get_youtube(request: Request):
     return request.app.state.youtube
 
 
-def get_settings(request: Request) -> SettingsStore:
+def get_settings(request: Request):
     return request.app.state.settings

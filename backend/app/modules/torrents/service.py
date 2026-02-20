@@ -12,9 +12,9 @@ except ImportError:
     lt = None
 
 from sqlalchemy.orm import Session
-from .config import AppConfig
-from .library import ScanScheduler
-from .models import Download
+from backend.app.core.config import AppConfig
+from backend.app.modules.library.service import ScanScheduler
+from backend.app.core.models import Download
 
 logger = logging.getLogger(__name__)
 

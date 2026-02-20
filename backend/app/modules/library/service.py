@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import List
 from sqlalchemy.orm import Session
 
-from .config import AppConfig
-from .models import Video, Progress
+from backend.app.core.config import AppConfig
+from backend.app.core.models import Video, Progress
 
 logger = logging.getLogger(__name__)
 

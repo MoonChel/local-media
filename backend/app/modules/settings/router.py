@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from ..config import MediaSource
-from ..dependencies import get_settings, require_auth
-from ..settings import SettingsStore
+from backend.app.core.config import MediaSource
+from backend.app.core.dependencies import get_settings, require_auth
+from backend.app.modules.settings.service import SettingsStore
 
 router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(require_auth)])
 
@@ -23,8 +23,8 @@ async def apply_runtime_config(request: Request) -> None:
     """Helper to reload config and restart background tasks"""
     from contextlib import suppress
     import asyncio
-    from ..config import load_config
-    from ..library import run_file_watcher, run_periodic_scan
+    from backend.app.core.config import load_config
+    from backend.app.modules.library.service import run_file_watcher, run_periodic_scan
     
     config = load_config()
     app = request.app

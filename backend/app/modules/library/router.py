@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from ..dependencies import get_index, require_auth
-from ..library import LibraryIndex
+from backend.app.core.dependencies import get_index, require_auth
+from backend.app.modules.library.service import LibraryIndex
 
 router = APIRouter(prefix="/api", tags=["videos"], dependencies=[Depends(require_auth)])
 
@@ -63,7 +63,7 @@ def put_progress(video_id: str, payload: ProgressPayload, index: LibraryIndex = 
 @router.get("/stream/{video_id}")
 async def stream_video(video_id: str, index: LibraryIndex = Depends(get_index)):
     import logging
-    from ..transcoding import needs_transcoding, create_transcode_response
+    from backend.app.modules.library.transcoding import needs_transcoding, create_transcode_response
     
     logger = logging.getLogger(__name__)
     logger.info(f"Stream request for video_id: {video_id} (type: {type(video_id)})")
