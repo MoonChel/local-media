@@ -30,6 +30,9 @@ const showAddFolderDialog = ref(false)
 const isDragging = ref(false)
 const uploadProgress = ref([])
 
+const selectionMode = ref(false)
+const selectedVideos = ref(new Set())
+
 function normalizePath(value) {
   return String(value || '')
     .replace(/\\/g, '/')
@@ -212,25 +215,100 @@ async function submitMove(data) {
   error.value = ''
   
   try {
-    const res = await fetch(`/api/videos/${moveVideoId.value}/move`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        target_source_id: data.targetSource,
-        target_rel_path: data.targetPath
+    // Check if bulk move (comma-separated IDs)
+    const videoIds = moveVideoId.value.split(',')
+    
+    if (videoIds.length > 1) {
+      // Bulk move
+      const promises = videoIds.map(videoId =>
+        fetch(`/api/videos/${videoId}/move`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            target_source_id: data.targetSource,
+            target_rel_path: data.targetPath
+          })
+        })
+      )
+      await Promise.all(promises)
+      selectedVideos.value.clear()
+      selectionMode.value = false
+    } else {
+      // Single move
+      const res = await fetch(`/api/videos/${moveVideoId.value}/move`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target_source_id: data.targetSource,
+          target_rel_path: data.targetPath
+        })
       })
-    })
-    
-    if (!res.ok) {
-      const text = await res.text()
-      throw new Error(`Failed: ${res.status} ${text}`)
+      
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`Failed: ${res.status} ${text}`)
+      }
     }
-    
+
     showMoveDialog.value = false
     await loadLibrary()
   } catch (e) {
     error.value = String(e)
   }
+}
+
+function toggleSelectionMode() {
+  selectionMode.value = !selectionMode.value
+  if (!selectionMode.value) {
+    selectedVideos.value.clear()
+  }
+}
+
+function toggleVideoSelection(videoId) {
+  if (selectedVideos.value.has(videoId)) {
+    selectedVideos.value.delete(videoId)
+  } else {
+    selectedVideos.value.add(videoId)
+  }
+}
+
+function selectAll() {
+  const allVideos = displayedVideos.value.filter(v => v.type === 'video')
+  allVideos.forEach(v => selectedVideos.value.add(v.id))
+}
+
+function deselectAll() {
+  selectedVideos.value.clear()
+}
+
+async function bulkDelete() {
+  const count = selectedVideos.value.size
+  if (count === 0) return
+  if (!confirm(`Delete ${count} selected video(s)?`)) return
+  
+  try {
+    const promises = Array.from(selectedVideos.value).map(videoId =>
+      fetch(`/api/videos/${videoId}`, { method: 'DELETE' })
+    )
+    await Promise.all(promises)
+    selectedVideos.value.clear()
+    selectionMode.value = false
+    await loadLibrary()
+  } catch (e) {
+    error.value = String(e)
+  }
+}
+
+function bulkMove() {
+  if (selectedVideos.value.size === 0) return
+  const firstVideo = displayedVideos.value.find(v => selectedVideos.value.has(v.id))
+  if (!firstVideo) return
+  
+  moveVideoId.value = Array.from(selectedVideos.value).join(',')
+  moveVideoName.value = `${selectedVideos.value.size} videos`
+  moveInitialSource.value = firstVideo.source_id
+  moveInitialPath.value = firstVideo.rel_path
+  showMoveDialog.value = true
 }
 
 function handleDragOver(event) {
@@ -368,6 +446,32 @@ function removeUpload(idx) {
         <p class="text-sm text-muted">Finder/S3 style browse rooted at /media</p>
       </div>
       <div class="flex gap-2">
+        <button 
+          v-if="!selectionMode"
+          @click="toggleSelectionMode" 
+          class="rounded border border-white/20 px-3 py-2 text-sm font-medium hover:bg-white/5"
+        >
+          Select
+        </button>
+        <template v-else>
+          <button @click="selectAll" class="rounded border border-white/20 px-3 py-2 text-sm font-medium hover:bg-white/5">Select All</button>
+          <button @click="deselectAll" class="rounded border border-white/20 px-3 py-2 text-sm font-medium hover:bg-white/5">Deselect All</button>
+          <button 
+            @click="bulkMove" 
+            :disabled="selectedVideos.size === 0"
+            class="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
+          >
+            Move ({{ selectedVideos.size }})
+          </button>
+          <button 
+            @click="bulkDelete" 
+            :disabled="selectedVideos.size === 0"
+            class="rounded bg-red-600 px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
+          >
+            Delete ({{ selectedVideos.size }})
+          </button>
+          <button @click="toggleSelectionMode" class="rounded border border-white/20 px-3 py-2 text-sm font-medium hover:bg-white/5">Cancel</button>
+        </template>
         <button @click="showAddFolderDialog = true" class="rounded border border-white/20 px-3 py-2 text-sm font-medium hover:bg-white/5">+ Add Folder</button>
         <button @click="loadLibrary" class="rounded bg-accent px-3 py-2 text-sm font-medium text-black hover:opacity-90">Rescan</button>
       </div>
@@ -417,9 +521,12 @@ function removeUpload(idx) {
             v-for="item in searchResults"
             :key="item.id"
             :video="item"
+            :selected="selectedVideos.has(item.id)"
+            :selectionMode="selectionMode"
             @play="openFile"
             @move="openMoveDialog"
             @delete="deleteVideo"
+            @toggleSelect="toggleVideoSelection"
           />
         </div>
       </div>
@@ -458,9 +565,12 @@ function removeUpload(idx) {
             <VideoCard
               v-else
               :video="entry"
+              :selected="selectedVideos.has(entry.id)"
+              :selectionMode="selectionMode"
               @play="openFile"
               @move="openMoveDialog"
               @delete="deleteVideo"
+              @toggleSelect="toggleVideoSelection"
             />
           </div>
         </div>

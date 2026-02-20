@@ -3,10 +3,18 @@ const props = defineProps({
   video: {
     type: Object,
     required: true
+  },
+  selected: {
+    type: Boolean,
+    default: false
+  },
+  selectionMode: {
+    type: Boolean,
+    default: false
   }
 })
 
-const emit = defineEmits(['play', 'move', 'delete'])
+const emit = defineEmits(['play', 'move', 'delete', 'toggleSelect'])
 
 function playPreview(event) {
   const el = event.currentTarget
@@ -21,30 +29,52 @@ function stopPreview(event) {
   el.pause()
   el.currentTime = 5  // Reset to 5 seconds
 }
+
+function handleClick(event) {
+  if (props.selectionMode) {
+    event.preventDefault()
+    emit('toggleSelect', props.video.id)
+  }
+}
 </script>
 
 <template>
-  <button
-    @click="emit('play', video.id)"
-    class="rounded-md border border-white/10 bg-black/15 p-3 text-left hover:border-white/25 relative group overflow-hidden flex flex-col h-full"
-  >
-    <div class="flex-1 flex flex-col min-w-0">
-      <div class="mb-2 aspect-video w-full rounded bg-black overflow-hidden flex-shrink-0">
-        <video
-          :src="video.stream_url"
-          muted
-          playsinline
-          preload="metadata"
-          class="h-full w-full object-contain"
-          @mouseenter="playPreview"
-          @mouseleave="stopPreview"
-        ></video>
+  <div class="relative">
+    <a
+      :href="`/watch/${video.id}`"
+      @click="handleClick"
+      :class="[
+        'block rounded-md border p-3 text-left hover:border-white/25 relative group overflow-hidden flex flex-col h-full',
+        selected ? 'border-blue-500 bg-blue-950/30' : 'border-white/10 bg-black/15'
+      ]"
+    >
+      <div v-if="selectionMode" class="absolute top-2 left-2 z-10">
+        <input
+          type="checkbox"
+          :checked="selected"
+          @click.stop
+          @change="emit('toggleSelect', video.id)"
+          class="h-5 w-5 rounded border-white/20 bg-black/50"
+        />
       </div>
-      <p class="text-sm font-semibold text-gray-200 line-clamp-2 min-h-[2.5rem]">{{ video.title }}</p>
-    </div>
-    <div class="absolute top-2 right-2 hidden group-hover:flex gap-1">
-      <button @click.stop="emit('move', video)" class="rounded bg-blue-600 px-2 py-1 text-xs text-white" title="Move">Move</button>
-      <button @click.stop="emit('delete', video.id, video.title)" class="rounded bg-red-600 px-2 py-1 text-xs text-white" title="Delete">Del</button>
-    </div>
-  </button>
+      <div class="flex-1 flex flex-col min-w-0">
+        <div class="mb-2 aspect-video w-full rounded bg-black overflow-hidden flex-shrink-0">
+          <video
+            :src="video.stream_url"
+            muted
+            playsinline
+            preload="metadata"
+            class="h-full w-full object-contain"
+            @mouseenter="playPreview"
+            @mouseleave="stopPreview"
+          ></video>
+        </div>
+        <p class="text-sm font-semibold text-gray-200 line-clamp-2 min-h-[2.5rem]">{{ video.title }}</p>
+      </div>
+      <div v-if="!selectionMode" class="absolute top-2 right-2 hidden group-hover:flex gap-1">
+        <button @click.stop.prevent="emit('move', video)" class="rounded bg-blue-600 px-2 py-1 text-xs text-white" title="Move">Move</button>
+        <button @click.stop.prevent="emit('delete', video.id, video.title)" class="rounded bg-red-600 px-2 py-1 text-xs text-white" title="Delete">Del</button>
+      </div>
+    </a>
+  </div>
 </template>
