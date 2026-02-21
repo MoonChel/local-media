@@ -94,36 +94,25 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Video Player", lifespan=lifespan)
 
-# Include core routers (always enabled)
+# Register routers based on configuration
+config = load_config()
+
+# Core routers (always enabled)
 app.include_router(library_router.router)
 app.include_router(settings_router.router)
 
-# Include optional module routers (conditionally registered on first request)
-# We'll register them dynamically based on config
+# Optional module routers
+if config.modules.torrents:
+    logger.info("Registering torrents module")
+    app.include_router(torrents_router.router)
 
+if config.modules.youtube:
+    logger.info("Registering YouTube module")
+    app.include_router(youtube_router.router)
 
-@app.on_event("startup")
-async def register_module_routers():
-    """Register module routers based on configuration."""
-    config = load_config()
-    
-    if config.modules.torrents:
-        logger.info("Torrents module enabled")
-        app.include_router(torrents_router.router)
-    else:
-        logger.info("Torrents module disabled")
-    
-    if config.modules.youtube:
-        logger.info("YouTube module enabled")
-        app.include_router(youtube_router.router)
-    else:
-        logger.info("YouTube module disabled")
-    
-    if config.modules.pastebin:
-        logger.info("Pastebin module enabled")
-        app.include_router(pastebin_router.router)
-    else:
-        logger.info("Pastebin module disabled")
+if config.modules.pastebin:
+    logger.info("Registering pastebin module")
+    app.include_router(pastebin_router.router)
 
 
 def require_auth(request: Request, credentials: Optional[HTTPBasicCredentials] = Depends(security)):
