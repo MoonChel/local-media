@@ -187,7 +187,10 @@ onBeforeUnmount(() => {
       @navigate="navigateTo"
     />
 
-    <div v-if="error" class="rounded border border-red-500/60 bg-red-950/30 p-3 text-red-300">{{ error }}</div>
+    <div v-if="error" class="rounded border border-red-500/60 bg-red-950/30 p-3 text-red-300 flex items-center justify-between mb-4">
+      <span>{{ error }}</span>
+      <button @click="error = ''" class="ml-2 rounded px-2 py-1 text-xs hover:bg-red-900/50">✕</button>
+    </div>
     <div v-else-if="details" class="space-y-3">
       <h2 class="text-2xl font-semibold">{{ details.title }}</h2>
       <p class="text-xs text-muted">{{ details.source_label || details.source_id }} • {{ details.rel_path }}</p>

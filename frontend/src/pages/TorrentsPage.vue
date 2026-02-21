@@ -146,7 +146,10 @@ onBeforeUnmount(() => {
         <button @click="loadJobs" class="rounded border border-white/20 px-3 py-2 text-sm">Refresh jobs</button>
       </div>
 
-      <p v-if="error" class="mt-3 text-sm text-red-300">{{ error }}</p>
+      <div v-if="error" class="mt-3 flex items-center justify-between rounded border border-red-500/60 bg-red-950/30 p-3 text-red-300">
+        <span>{{ error }}</span>
+        <button @click="error = ''" class="ml-2 rounded px-2 py-1 text-xs hover:bg-red-900/50">✕</button>
+      </div>
       <div class="mt-4 overflow-x-auto">
         <table class="min-w-full text-left text-sm">
           <thead class="text-muted">
