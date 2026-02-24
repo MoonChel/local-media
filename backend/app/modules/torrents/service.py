@@ -59,29 +59,31 @@ class TorrentManager:
         finally:
             session.close()
 
-    async def start_magnet(self, magnet: str, source_id: str) -> dict:
+    async def start_magnet(self, magnet: str, path: str = "") -> dict:
         if not magnet.startswith("magnet:"):
             raise ValueError("Invalid magnet link")
-        return await self._start_job(source_kind="magnet", source_value=magnet, source_id=source_id)
+        return await self._start_job(source_kind="magnet", source_value=magnet, path=path)
 
-    async def start_torrent_file(self, file_path: str, source_id: str) -> dict:
-        path = Path(file_path)
-        if not path.exists() or not path.is_file():
+    async def start_torrent_file(self, file_path: str, path: str = "") -> dict:
+        file = Path(file_path)
+        if not file.exists() or not file.is_file():
             raise ValueError("Torrent file is missing")
-        return await self._start_job(source_kind="torrent", source_value=str(path), source_id=source_id)
+        return await self._start_job(source_kind="torrent", source_value=str(file), path=path)
 
-    async def _start_job(self, source_kind: str, source_value: str, source_id: str) -> dict:
+    async def _start_job(self, source_kind: str, source_value: str, path: str = "") -> dict:
         if not self.enabled():
             raise ValueError("Downloads are disabled or libtorrent not available")
 
-        source = next((s for s in self.config.library.sources if s.id == source_id), None)
-        if not source:
-            raise ValueError("Invalid target folder")
-
-        Path(source.path).mkdir(parents=True, exist_ok=True)
+        # Build target directory from path
+        base_path = Path("/media")
+        target_dir = base_path / path if path else base_path
+        target_dir.mkdir(parents=True, exist_ok=True)
 
         job_id = uuid.uuid4().hex[:12]
         now = datetime.now(timezone.utc).isoformat()
+        
+        # Get folder label from path
+        folder_label = path.split('/')[-1] if path else 'media'
         
         session: Session = self.session_maker()
         try:
@@ -89,9 +91,9 @@ class TorrentManager:
                 id=job_id,
                 source_kind=source_kind,
                 source_value=source_value,
-                source_id=source.id,
-                source_label=source.label,
-                target_dir=source.path,
+                source_id=path or "media",  # Use path as identifier
+                source_label=folder_label,
+                target_dir=str(target_dir),
                 status='queued',
                 created_at=now,
                 updated_at=now
@@ -102,7 +104,7 @@ class TorrentManager:
             session.close()
 
         loop = asyncio.get_running_loop()
-        task = loop.create_task(self._run_job(job_id=job_id, source_kind=source_kind, source_value=source_value, target_dir=source.path))
+        task = loop.create_task(self._run_job(job_id=job_id, source_kind=source_kind, source_value=source_value, target_dir=str(target_dir)))
         self._tasks[job_id] = task
         return self.get_job(job_id)
 

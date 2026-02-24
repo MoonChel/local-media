@@ -43,27 +43,29 @@ class YouTubeDownloadManager:
         finally:
             session.close()
 
-    async def start_download(self, url: str, source_id: str) -> dict:
+    async def start_download(self, url: str, path: str = "") -> dict:
         if not self.enabled():
             raise ValueError("YouTube downloads are disabled or yt-dlp not available")
 
-        source = next((s for s in self.config.library.sources if s.id == source_id), None)
-        if not source:
-            raise ValueError("Invalid target folder")
-
-        Path(source.path).mkdir(parents=True, exist_ok=True)
+        # Build target directory from path
+        base_path = Path("/media")
+        target_dir = base_path / path if path else base_path
+        target_dir.mkdir(parents=True, exist_ok=True)
 
         job_id = uuid.uuid4().hex[:12]
         now = datetime.now(timezone.utc).isoformat()
+        
+        # Get folder label from path
+        folder_label = path.split('/')[-1] if path else 'media'
         
         session: Session = self.session_maker()
         try:
             download = YouTubeDownload(
                 id=job_id,
                 url=url,
-                source_id=source.id,
-                source_label=source.label,
-                target_dir=source.path,
+                source_id=path or "media",  # Use path as identifier
+                source_label=folder_label,
+                target_dir=str(target_dir),
                 status='queued',
                 created_at=now,
                 updated_at=now
@@ -74,7 +76,7 @@ class YouTubeDownloadManager:
             session.close()
 
         loop = asyncio.get_running_loop()
-        task = loop.create_task(self._run_job(job_id=job_id, url=url, target_dir=source.path))
+        task = loop.create_task(self._run_job(job_id=job_id, url=url, target_dir=str(target_dir)))
         self._tasks[job_id] = task
         return self.get_job(job_id)
 

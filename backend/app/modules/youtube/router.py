@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class YouTubePayload(BaseModel):
     url: str
-    source_id: str
+    path: str = ""  # Path relative to /media
 
 
 @router.get("")
@@ -22,9 +22,9 @@ def list_youtube_downloads(manager: YouTubeDownloadManager = Depends(get_youtube
 
 @router.post("/download")
 async def start_youtube_download(payload: YouTubePayload, manager: YouTubeDownloadManager = Depends(get_youtube)):
-    logger.info(f"Received YouTube download request: {payload.url} for source: {payload.source_id}")
+    logger.info(f"Received YouTube download request: {payload.url} for path: {payload.path}")
     try:
-        result = await manager.start_download(payload.url, payload.source_id)
+        result = await manager.start_download(payload.url, payload.path)
         logger.info(f"YouTube job created: {result.get('id')}")
         return result
     except ValueError as e:
