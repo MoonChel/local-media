@@ -1,23 +1,33 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
-
-const props = defineProps({
-  sources: Array,
-  modelValue: Object, // { sourceId, path }
-})
+import { computed, onMounted, ref } from 'vue'
 
 const emit = defineEmits(['update:modelValue', 'close'])
 
-const selectedSource = ref('')
 const currentPath = ref('')
+const folders = ref([])
+const loading = ref(false)
 
-// Initialize with modelValue if provided
-watch(() => props.modelValue, (val) => {
-  if (val) {
-    selectedSource.value = val.sourceId || ''
-    currentPath.value = val.path || ''
+async function loadFolders() {
+  loading.value = true
+  try {
+    const params = new URLSearchParams()
+    if (currentPath.value) {
+      params.append('path', currentPath.value)
+    }
+    const res = await fetch(`/api/browse?${params}`)
+    if (res.ok) {
+      const data = await res.json()
+      folders.value = data.folders || []
+    } else {
+      folders.value = []
+    }
+  } catch (e) {
+    console.error('Failed to load folders:', e)
+    folders.value = []
+  } finally {
+    loading.value = false
   }
-}, { immediate: true })
+}
 
 function normalizePath(value) {
   return String(value || '')
@@ -26,71 +36,43 @@ function normalizePath(value) {
     .replace(/\/+$/, '')
 }
 
-function sourceFolderName(src) {
-  const p = normalizePath(src?.path || '')
-  const parts = p.split('/').filter(Boolean)
-  return parts[parts.length - 1] || src?.label || src?.id || 'folder'
-}
-
-const selectedSourceItem = computed(() => 
-  props.sources?.find(s => s.id === selectedSource.value) || null
-)
-
 const breadcrumbs = computed(() => {
-  const out = [{ label: '/media', source: '', path: '' }]
-  if (!selectedSource.value) return out
-
-  const src = selectedSourceItem.value
-  out.push({ label: sourceFolderName(src), source: selectedSource.value, path: '' })
-
+  const out = [{ label: '/media', path: '' }]
+  
   const segments = currentPath.value ? currentPath.value.split('/').filter(Boolean) : []
   let acc = ''
   for (const seg of segments) {
     acc = normalizePath(acc ? `${acc}/${seg}` : seg)
-    out.push({ label: seg, source: selectedSource.value, path: acc })
+    out.push({ label: seg, path: acc })
   }
   return out
 })
 
-const mediaRootEntries = computed(() => {
-  return (props.sources || []).map((s) => ({
-    type: 'source',
-    id: s.id,
-    name: sourceFolderName(s),
-    label: s.label,
-  })).sort((a, b) => a.name.localeCompare(b.name))
-})
-
-// Get subfolders in current location
-const subfolders = computed(() => {
-  if (!selectedSource.value) return []
-  
-  // For now, we don't have a way to list subfolders without videos
-  // So we'll just allow selecting the current folder
-  return []
-})
-
-function openSource(sourceId) {
-  selectedSource.value = sourceId
-  currentPath.value = ''
+function openFolder(path) {
+  currentPath.value = normalizePath(path)
+  loadFolders()
 }
 
 function openBreadcrumb(crumb) {
-  selectedSource.value = crumb.source || ''
   currentPath.value = normalizePath(crumb.path || '')
+  loadFolders()
 }
 
 function selectCurrent() {
-  if (!selectedSource.value) return
+  const fullPath = currentPath.value ? `/media/${currentPath.value}` : '/media'
+  const label = breadcrumbs.value[breadcrumbs.value.length - 1].label
   
   emit('update:modelValue', {
-    sourceId: selectedSource.value,
     path: currentPath.value,
-    fullPath: currentPath.value ? `${selectedSourceItem.value.path}/${currentPath.value}` : selectedSourceItem.value.path,
-    label: breadcrumbs.value[breadcrumbs.value.length - 1].label
+    fullPath: fullPath,
+    label: label
   })
   emit('close')
 }
+
+onMounted(() => {
+  loadFolders()
+})
 </script>
 
 <template>
@@ -102,7 +84,7 @@ function selectCurrent() {
       <div class="mb-4 flex flex-wrap items-center gap-2 text-sm">
         <button
           v-for="crumb in breadcrumbs"
-          :key="`${crumb.source}:${crumb.path || 'root'}`"
+          :key="crumb.path || 'root'"
           @click="openBreadcrumb(crumb)"
           class="rounded border border-white/20 px-2 py-1 hover:bg-white/5"
           :class="{ 'bg-white/10': crumb === breadcrumbs[breadcrumbs.length - 1] }"
@@ -112,23 +94,28 @@ function selectCurrent() {
       </div>
 
       <!-- Folder list -->
-      <div v-if="!selectedSource" class="mb-4">
-        <p class="mb-3 text-sm text-muted">Select a folder:</p>
-        <div class="grid gap-2 md:grid-cols-2">
-          <button
-            v-for="entry in mediaRootEntries"
-            :key="entry.id"
-            @click="openSource(entry.id)"
-            class="rounded-md border border-white/10 bg-black/15 p-3 text-left hover:border-white/25 flex items-center"
-          >
-            <p class="truncate text-base font-semibold text-gray-200 capitalize">📁 {{ entry.name }}</p>
-          </button>
+      <div class="mb-4">
+        <p class="mb-3 text-sm text-muted">
+          Current folder: <span class="text-gray-200">{{ breadcrumbs[breadcrumbs.length - 1].label }}</span>
+        </p>
+        
+        <div v-if="loading" class="text-sm text-muted">Loading folders...</div>
+        
+        <div v-else-if="folders.length > 0" class="mb-3">
+          <p class="text-xs text-muted mb-2">Subfolders:</p>
+          <div class="grid gap-2 md:grid-cols-2">
+            <button
+              v-for="folder in folders"
+              :key="folder.path"
+              @click="openFolder(folder.path)"
+              class="rounded-md border border-white/10 bg-black/15 p-3 text-left hover:border-white/25 flex items-center"
+            >
+              <p class="truncate text-base font-semibold text-gray-200">📁 {{ folder.name }}</p>
+            </button>
+          </div>
         </div>
-      </div>
-
-      <div v-else class="mb-4">
-        <p class="text-sm text-muted mb-2">Current folder: <span class="text-gray-200">{{ breadcrumbs[breadcrumbs.length - 1].label }}</span></p>
-        <p class="text-xs text-muted">Files will be downloaded to this folder</p>
+        
+        <p class="text-xs text-muted mt-2">Files will be downloaded to this folder</p>
       </div>
 
       <!-- Actions -->
@@ -136,8 +123,7 @@ function selectCurrent() {
         <button @click="$emit('close')" class="rounded border border-white/20 px-4 py-2 text-sm">Cancel</button>
         <button 
           @click="selectCurrent" 
-          :disabled="!selectedSource"
-          class="rounded bg-accent px-4 py-2 text-sm text-black disabled:opacity-50"
+          class="rounded bg-accent px-4 py-2 text-sm text-black"
         >
           Select This Folder
         </button>

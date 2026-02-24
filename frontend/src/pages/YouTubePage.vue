@@ -12,12 +12,6 @@ const selectedFolder = ref(null)
 const showFolderPicker = ref(false)
 let jobsInterval = null
 
-async function loadSources() {
-  const res = await fetch('/api/sources')
-  if (!res.ok) throw new Error(`Sources failed: ${res.status}`)
-  sources.value = await res.json()
-}
-
 async function loadJobs() {
   jobsLoading.value = true
   try {
@@ -44,7 +38,10 @@ async function onFolderSelected(folder) {
   const res = await fetch('/api/youtube/download', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url: url.value.trim(), source_id: folder.sourceId }),
+    body: JSON.stringify({ 
+      url: url.value.trim(), 
+      path: folder.path || ''
+    }),
   })
   if (!res.ok) {
     const text = await res.text()
@@ -100,7 +97,7 @@ function showTemporaryError(message) {
 }
 
 onMounted(async () => {
-  await Promise.all([loadSources(), loadJobs()])
+  await loadJobs()
   jobsInterval = setInterval(loadJobs, 5000)
 })
 
@@ -216,7 +213,6 @@ onBeforeUnmount(() => {
 
     <FolderPicker 
       v-if="showFolderPicker"
-      :sources="sources"
       @update:modelValue="onFolderSelected"
       @close="showFolderPicker = false"
     />

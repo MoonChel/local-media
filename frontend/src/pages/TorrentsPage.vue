@@ -14,12 +14,6 @@ const uploading = ref(false)
 const actionInProgress = ref({})
 let jobsInterval = null
 
-async function loadSources() {
-  const res = await fetch('/api/sources')
-  if (!res.ok) throw new Error(`Sources failed: ${res.status}`)
-  sources.value = await res.json()
-}
-
 async function loadJobs() {
   jobsLoading.value = true
   try {
@@ -45,7 +39,10 @@ async function onFolderSelected(folder) {
   const res = await fetch('/api/torrents/magnet', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ magnet: magnet.value.trim(), source_id: folder.sourceId }),
+    body: JSON.stringify({ 
+      magnet: magnet.value.trim(), 
+      path: folder.path || ''
+    }),
   })
   if (!res.ok) {
     error.value = `Failed: ${res.status} ${await res.text()}`
@@ -57,22 +54,12 @@ async function onFolderSelected(folder) {
 
 async function submitTorrentFile(event) {
   const file = event.target.files?.[0]
-  if (!file || !sourceId.value) return
-  uploading.value = true
-  error.value = ''
-  try {
-    const form = new FormData()
-    form.append('source_id', sourceId.value)
-    form.append('torrent_file', file)
-    const res = await fetch('/api/torrents/upload', { method: 'POST', body: form })
-    if (!res.ok) throw new Error(`Failed: ${res.status} ${await res.text()}`)
-    event.target.value = ''
-    await loadJobs()
-  } catch (e) {
-    error.value = String(e)
-  } finally {
-    uploading.value = false
-  }
+  if (!file) return
+  
+  // Show folder picker for torrent file upload
+  showFolderPicker.value = true
+  // Store the file for later use
+  selectedFolder.value = { file }
 }
 
 async function stopJob(jobId) {
@@ -116,7 +103,7 @@ async function deleteJob(jobId) {
 }
 
 onMounted(async () => {
-  await Promise.all([loadSources(), loadJobs()])
+  await loadJobs()
   jobsInterval = setInterval(loadJobs, 5000)
 })
 
@@ -231,7 +218,6 @@ onBeforeUnmount(() => {
 
     <FolderPicker 
       v-if="showFolderPicker"
-      :sources="sources"
       @update:modelValue="onFolderSelected"
       @close="showFolderPicker = false"
     />
