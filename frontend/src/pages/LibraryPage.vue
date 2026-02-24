@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import VideoCard from '../components/VideoCard.vue'
+import FolderCard from '../components/FolderCard.vue'
 import MoveDialog from '../components/MoveDialog.vue'
 import AddFolderDialog from '../components/AddFolderDialog.vue'
 import UploadProgress from '../components/UploadProgress.vue'
@@ -13,11 +14,11 @@ const router = useRouter()
 const { showNotification } = useNotification()
 
 const videos = ref([])
-const sources = ref([])
+const folders = ref([])
+const browsedItems = ref({ folders: [], files: [] })
 const loading = ref(true)
 const error = ref('')
 
-const selectedSource = ref('')
 const currentPath = ref('')
 const search = ref('')
 
@@ -34,8 +35,12 @@ const uploadProgress = ref([])
 
 const selectionMode = ref(false)
 const selectedVideos = ref(new Set())
+const selectedFolders = ref(new Set())
 const convertingVideos = ref(new Set())
 const showBulkActionsMenu = ref(false)
+
+const moveFolderPath = ref('')
+const moveFolderName = ref('')
 
 function normalizePath(value) {
   return String(value || '')
@@ -51,14 +56,12 @@ function sourceFolderName(src) {
 }
 
 function applyQueryState() {
-  selectedSource.value = String(route.query.source || '')
   currentPath.value = normalizePath(route.query.path || '')
   search.value = String(route.query.q || '')
 }
 
 function syncQueryState() {
   const query = {}
-  if (selectedSource.value) query.source = selectedSource.value
   if (currentPath.value) query.path = currentPath.value
   if (search.value.trim()) query.q = search.value.trim()
   router.push({ path: '/', query })
@@ -68,14 +71,15 @@ async function loadLibrary() {
   loading.value = true
   error.value = ''
   try {
-    const [videosRes, sourcesRes] = await Promise.all([fetch('/api/videos'), fetch('/api/sources')])
+    const videosRes = await fetch('/api/videos')
     if (!videosRes.ok) throw new Error(`Videos failed: ${videosRes.status}`)
-    if (!sourcesRes.ok) throw new Error(`Sources failed: ${sourcesRes.status}`)
 
     videos.value = await videosRes.json()
-    sources.value = await sourcesRes.json()
 
     applyQueryState()
+    
+    // Always load folders
+    await loadFolders()
   } catch (e) {
     error.value = String(e)
   } finally {
@@ -83,87 +87,66 @@ async function loadLibrary() {
   }
 }
 
-const selectedSourceItem = computed(() => sources.value.find(s => s.id === selectedSource.value) || null)
-const sourceVideos = computed(() => videos.value.filter(v => v.source_id === selectedSource.value))
-
-const mediaRootEntries = computed(() => {
-  const out = sources.value.map((s) => ({
-    type: 'source',
-    id: s.id,
-    name: sourceFolderName(s),
-    label: s.label,
-  }))
-  return out.sort((a, b) => a.name.localeCompare(b.name))
-})
+async function loadFolders() {
+  try {
+    const params = new URLSearchParams()
+    if (currentPath.value) {
+      params.append('path', currentPath.value)
+    }
+    const res = await fetch(`/api/browse?${params}`)
+    if (res.ok) {
+      const data = await res.json()
+      browsedItems.value = data
+    } else {
+      browsedItems.value = { folders: [], files: [] }
+    }
+  } catch (e) {
+    console.error('Failed to load folders:', e)
+    browsedItems.value = { folders: [], files: [] }
+  }
+}
 
 const folderEntries = computed(() => {
-  if (!selectedSource.value) return []
-  const base = currentPath.value
-  const folders = new Map()
-  const files = []
+  // Use filesystem structure from browse API
+  const folderList = (browsedItems.value.folders || []).map(f => ({
+    type: 'folder',
+    name: f.name,
+    path: f.path
+  }))
+  
+  const fileList = (browsedItems.value.files || []).map(f => ({
+    type: 'file',
+    ...f,
+    name: f.title
+  }))
 
-  for (const item of sourceVideos.value) {
-    const rel = normalizePath(item.rel_path)
-    if (base && !(rel === base || rel.startsWith(base + '/'))) continue
-
-    const rest = base ? rel.slice(base.length + (rel === base ? 0 : 1)) : rel
-    if (!rest) continue
-
-    const parts = rest.split('/')
-    if (parts.length > 1) {
-      const folderName = parts[0]
-      if (!folders.has(folderName)) {
-        const full = normalizePath(base ? `${base}/${folderName}` : folderName)
-        folders.set(folderName, {
-          type: 'folder',
-          name: folderName,
-          path: full,
-        })
-      }
-    } else {
-      files.push({ type: 'file', ...item, name: item.title })
-    }
-  }
-
-  const folderList = Array.from(folders.values()).sort((a, b) => a.name.localeCompare(b.name))
-  const fileList = files.sort((a, b) => a.rel_path.localeCompare(b.rel_path))
   return [...folderList, ...fileList]
 })
 
 const searchResults = computed(() => {
   const q = search.value.trim().toLowerCase()
   if (!q) return []
-  const pool = selectedSource.value ? sourceVideos.value : videos.value
-  return pool
+  return videos.value
     .filter(v => v.title.toLowerCase().includes(q) || v.rel_path.toLowerCase().includes(q))
     .sort((a, b) => a.rel_path.localeCompare(b.rel_path))
 })
 
 const breadcrumbs = computed(() => {
-  const out = [{ label: '/media', source: '', path: '' }]
-  if (!selectedSource.value) return out
-
-  const src = selectedSourceItem.value
-  out.push({ label: sourceFolderName(src), source: selectedSource.value, path: '' })
-
+  const out = [{ label: '/media', path: '' }]
+  
   const segments = currentPath.value ? currentPath.value.split('/').filter(Boolean) : []
   let acc = ''
   for (const seg of segments) {
     acc = normalizePath(acc ? `${acc}/${seg}` : seg)
-    out.push({ label: seg, source: selectedSource.value, path: acc })
+    out.push({ label: seg, path: acc })
   }
   return out
 })
 
-function openSource(sourceId) {
-  selectedSource.value = sourceId
-  currentPath.value = ''
-  syncQueryState()
-}
-
 function openFolder(path) {
   currentPath.value = normalizePath(path)
   syncQueryState()
+  loadFolders()
 }
 
 function openFile(videoId) {
@@ -171,22 +154,19 @@ function openFile(videoId) {
 }
 
 function openBreadcrumb(crumb) {
-  selectedSource.value = crumb.source || ''
   currentPath.value = normalizePath(crumb.path || '')
   syncQueryState()
+  loadFolders()
 }
 
 function goUp() {
-  if (!selectedSource.value) return
-  if (!currentPath.value) {
-    selectedSource.value = ''
-    syncQueryState()
-    return
-  }
+  if (!currentPath.value) return
+  
   const parts = currentPath.value.split('/')
   parts.pop()
   currentPath.value = parts.join('/')
   syncQueryState()
+  loadFolders()
 }
 
 watch(() => route.query, applyQueryState)
@@ -294,6 +274,7 @@ function toggleSelectionMode() {
   selectionMode.value = !selectionMode.value
   if (!selectionMode.value) {
     selectedVideos.value.clear()
+    selectedFolders.value.clear()
   }
 }
 
@@ -305,13 +286,27 @@ function toggleVideoSelection(videoId) {
   }
 }
 
+function toggleFolderSelection(folderPath) {
+  if (selectedFolders.value.has(folderPath)) {
+    selectedFolders.value.delete(folderPath)
+  } else {
+    selectedFolders.value.add(folderPath)
+  }
+}
+
 function selectAll() {
-  const allVideos = displayedVideos.value.filter(v => v.type === 'video')
-  allVideos.forEach(v => selectedVideos.value.add(v.id))
+  folderEntries.value.forEach(entry => {
+    if (entry.type === 'folder') {
+      selectedFolders.value.add(entry.path)
+    } else if (entry.type === 'file') {
+      selectedVideos.value.add(entry.id)
+    }
+  })
 }
 
 function deselectAll() {
   selectedVideos.value.clear()
+  selectedFolders.value.clear()
 }
 
 async function bulkDelete() {
@@ -381,11 +376,6 @@ function handleDragLeave(event) {
 async function handleDrop(event) {
   event.preventDefault()
   isDragging.value = false
-  
-  if (!selectedSource.value) {
-    showTemporaryError('Please select a folder first')
-    return
-  }
   
   const files = Array.from(event.dataTransfer.files).filter(f => 
     f.type.startsWith('video/') || 
@@ -464,17 +454,16 @@ async function submitAddFolder(folderName) {
   error.value = ''
   
   try {
-    const folderId = folderName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-    const folderPath = `/media/${folderName}`
+    // Create folder in current directory
+    const newFolderPath = currentPath.value 
+      ? `${currentPath.value}/${folderName}` 
+      : folderName
     
-    const res = await fetch('/api/settings/sources', {
+    const res = await fetch('/api/browse/create-folder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id: folderId,
-        label: folderName,
-        path: folderPath,
-        create_if_missing: true,
+        path: newFolderPath
       }),
     })
     
@@ -484,7 +473,7 @@ async function submitAddFolder(folderName) {
     }
     
     showAddFolderDialog.value = false
-    await loadLibrary()
+    await loadFolders()
   } catch (e) {
     error.value = String(e.message || e)
   }
@@ -492,6 +481,30 @@ async function submitAddFolder(folderName) {
 
 function removeUpload(idx) {
   uploadProgress.value.splice(idx, 1)
+}
+
+function openMoveFolder(folder) {
+  moveFolderPath.value = folder.path
+  moveFolderName.value = folder.name
+  // TODO: Implement folder move dialog
+  showNotification('Folder move not yet implemented', 'info')
+}
+
+async function deleteFolder(folder) {
+  if (!confirm(`Delete folder "${folder.name}" and all its contents?`)) return
+  
+  try {
+    const params = new URLSearchParams({ path: folder.path })
+    const res = await fetch(`/api/browse?${params}`, { method: 'DELETE' })
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(text)
+    }
+    
+    await loadLibrary()
+  } catch (e) {
+    error.value = String(e)
+  }
 }
 </script>
 
@@ -518,17 +531,18 @@ function removeUpload(idx) {
           <div class="relative">
             <button 
               @click="showBulkActionsMenu = !showBulkActionsMenu"
-              :disabled="selectedVideos.size === 0"
+              :disabled="selectedVideos.size === 0 && selectedFolders.size === 0"
               class="rounded bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-40 flex items-center gap-1"
             >
-              Actions ({{ selectedVideos.size }})
+              Actions ({{ selectedVideos.size + selectedFolders.size }})
               <span class="text-xs">▼</span>
             </button>
             <div 
-              v-if="showBulkActionsMenu && selectedVideos.size > 0"
+              v-if="showBulkActionsMenu && (selectedVideos.size > 0 || selectedFolders.size > 0)"
               class="absolute right-0 top-full mt-1 w-48 rounded border border-white/20 bg-black/95 shadow-lg z-10"
             >
               <button 
+                v-if="selectedVideos.size > 0"
                 @click="bulkConvert(); showBulkActionsMenu = false" 
                 class="w-full px-4 py-2 text-left text-sm hover:bg-white/10 flex items-center gap-2"
               >
@@ -586,8 +600,8 @@ function removeUpload(idx) {
       <Breadcrumbs 
         v-if="!search.trim()"
         :breadcrumbs="breadcrumbs"
-        :can-go-up="!!selectedSource"
-        :show-drag-hint="!!selectedSource"
+        :can-go-up="!!currentPath"
+        :show-drag-hint="false"
         @go-up="goUp"
         @navigate="openBreadcrumb"
       />
@@ -612,50 +626,34 @@ function removeUpload(idx) {
         </div>
       </div>
 
-      <!-- Media Root -->
-      <div v-else-if="!selectedSource">
-        <p class="mb-3 text-sm text-muted">/media</p>
-        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <div v-for="entry in mediaRootEntries" :key="entry.id" class="rounded-md border border-white/10 bg-black/15 p-3 flex items-center">
-            <button @click="openSource(entry.id)" class="min-w-0 text-left w-full">
-              <p class="truncate text-base font-semibold text-gray-200 capitalize">📁 {{ entry.name }}</p>
-            </button>
-          </div>
-        </div>
-      </div>
-
       <!-- Folder Contents -->
-      <div v-else>
+      <div>
         <p class="mb-3 text-sm text-muted">{{ folderEntries.length }} item(s)</p>
         <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <div
-            v-for="entry in folderEntries"
-            :key="entry.type === 'folder' ? `d:${entry.path}` : `f:${entry.id}`"
-            :class="[
-              'rounded-md border border-white/10 bg-black/15 p-3',
-              entry.type === 'folder' ? 'flex items-center' : ''
-            ]"
-          >
-            <button
-              v-if="entry.type === 'folder'"
-              @click="openFolder(entry.path)"
-              class="min-w-0 text-left w-full"
-            >
-              <p class="truncate text-base font-semibold text-gray-200 capitalize">📁 {{ entry.name }}</p>
-            </button>
-            <VideoCard
-              v-else
-              :video="entry"
-              :selected="selectedVideos.has(entry.id)"
-              :selectionMode="selectionMode"
-              :converting="convertingVideos.has(entry.id)"
-              @play="openFile"
-              @move="openMoveDialog"
-              @delete="deleteVideo"
-              @toggleSelect="toggleVideoSelection"
-              @convert="convertVideo"
-            />
-          </div>
+          <FolderCard
+            v-for="entry in folderEntries.filter(e => e.type === 'folder')"
+            :key="`d:${entry.path}`"
+            :folder="entry"
+            :selected="selectedFolders.has(entry.path)"
+            :selectionMode="selectionMode"
+            @open="openFolder(entry.path)"
+            @move="openMoveFolder"
+            @delete="deleteFolder"
+            @toggleSelect="toggleFolderSelection"
+          />
+          <VideoCard
+            v-for="entry in folderEntries.filter(e => e.type === 'file')"
+            :key="`f:${entry.id || entry.rel_path}`"
+            :video="entry"
+            :selected="selectedVideos.has(entry.id)"
+            :selectionMode="selectionMode"
+            :converting="convertingVideos.has(entry.id)"
+            @play="openFile"
+            @move="openMoveDialog"
+            @delete="deleteVideo"
+            @toggleSelect="toggleVideoSelection"
+            @convert="convertVideo"
+          />
         </div>
       </div>
     </section>
@@ -663,8 +661,6 @@ function removeUpload(idx) {
     <MoveDialog
       :show="showMoveDialog"
       :video-name="moveVideoName"
-      :sources="sources"
-      :initial-source="moveInitialSource"
       :initial-path="moveInitialPath"
       @close="showMoveDialog = false"
       @submit="submitMove"

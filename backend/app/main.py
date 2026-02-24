@@ -36,17 +36,9 @@ security = HTTPBasic(auto_error=False)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from .modules.library.transcoding import check_ffmpeg
-    
     logger.info("Starting Video Player application...")
     config = load_config()
     logger.info(f"Config loaded from: {get_config_path()}")
-    
-    # Check FFmpeg availability
-    if check_ffmpeg():
-        logger.info("FFmpeg detected - transcoding enabled for unsupported formats")
-    else:
-        logger.warning("FFmpeg not found - MKV/AVI files may not play. Install FFmpeg for transcoding support.")
     
     # Initialize SQLAlchemy
     engine = get_engine(config.state.db_path)

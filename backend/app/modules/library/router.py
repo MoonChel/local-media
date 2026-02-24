@@ -43,6 +43,84 @@ def list_videos(index: LibraryIndex = Depends(get_index)):
     return out
 
 
+@router.get("/browse")
+def browse_filesystem(path: str = "", index: LibraryIndex = Depends(get_index)):
+    """Browse the filesystem starting from /media."""
+    from pathlib import Path
+    
+    # Base path is always /media
+    base_path = Path("/media")
+    current_path = base_path / path if path else base_path
+    
+    if not current_path.exists() or not current_path.is_dir():
+        return {"folders": [], "files": []}
+    
+    folders = []
+    files = []
+    
+    try:
+        for item in sorted(current_path.iterdir(), key=lambda x: x.name.lower()):
+            if item.name.startswith('.'):
+                continue
+                
+            if item.is_dir():
+                rel_path = str(item.relative_to(base_path))
+                folders.append({
+                    "name": item.name,
+                    "path": rel_path,
+                    "type": "folder"
+                })
+            elif item.is_file():
+                rel_path = str(item.relative_to(base_path))
+                
+                # Try to find video in index by checking all sources
+                video = None
+                video_id = None
+                for source in index.config.library.sources:
+                    source_base = Path(source.path)
+                    try:
+                        # Check if this file belongs to this source
+                        file_rel_to_source = str(item.relative_to(source_base))
+                        video_id = index.stable_id(source.id, file_rel_to_source)
+                        video = index.get_video(video_id)
+                        if video:
+                            break
+                    except ValueError:
+                        # File not in this source
+                        continue
+                
+                if video:
+                    files.append({
+                        "id": video_id,
+                        "rel_path": rel_path,
+                        "title": video.get("title", item.name),
+                        "size": video.get("size", 0),
+                        "mtime": video.get("mtime", 0),
+                        "position_seconds": video.get("position_seconds", 0),
+                        "stream_url": f"/api/stream/{video_id}",
+                        "watch_url": f"/watch/{video_id}",
+                        "type": "file"
+                    })
+                else:
+                    # File exists but not in video index
+                    files.append({
+                        "id": None,
+                        "rel_path": rel_path,
+                        "title": item.name,
+                        "size": item.stat().st_size,
+                        "mtime": item.stat().st_mtime,
+                        "position_seconds": 0,
+                        "stream_url": None,
+                        "watch_url": None,
+                        "type": "file",
+                        "is_video": False
+                    })
+    except PermissionError:
+        pass
+    
+    return {"folders": folders, "files": files}
+
+
 @router.post("/rescan")
 async def rescan(index: LibraryIndex = Depends(get_index)):
     await index.scan()
@@ -117,6 +195,93 @@ def move_video(video_id: str, payload: MoveVideoPayload, index: LibraryIndex = D
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/folders/move")
+def move_folder(payload: dict, index: LibraryIndex = Depends(get_index)):
+    """Move a folder and all its contents."""
+    import shutil
+    
+    source_id = payload.get('source_id')
+    folder_path = payload.get('folder_path')
+    target_source_id = payload.get('target_source_id')
+    target_path = payload.get('target_path')
+    
+    if not all([source_id, folder_path, target_source_id, target_path]):
+        raise HTTPException(status_code=400, detail="Missing required fields")
+    
+    # Find sources
+    source = next((s for s in index.config.library.sources if s.id == source_id), None)
+    target_source = next((s for s in index.config.library.sources if s.id == target_source_id), None)
+    
+    if not source or not target_source:
+        raise HTTPException(status_code=404, detail="Source not found")
+    
+    src_path = Path(source.path) / folder_path
+    dst_path = Path(target_source.path) / target_path
+    
+    if not src_path.exists():
+        raise HTTPException(status_code=404, detail="Source folder not found")
+    
+    if dst_path.exists():
+        raise HTTPException(status_code=400, detail="Target already exists")
+    
+    try:
+        dst_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src_path), str(dst_path))
+        return {"success": True, "message": f"Moved {src_path.name}"}
+    except Exception as e:
+        logger.exception(f"Error moving folder: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/browse/create-folder")
+def create_folder(payload: dict, index: LibraryIndex = Depends(get_index)):
+    """Create a new folder in /media."""
+    path = payload.get('path', '')
+    
+    if not path:
+        raise HTTPException(status_code=400, detail="Path is required")
+    
+    base_path = Path("/media")
+    target = base_path / path
+    
+    if target.exists():
+        raise HTTPException(status_code=400, detail="Folder already exists")
+    
+    try:
+        target.mkdir(parents=True, exist_ok=False)
+        return {"success": True, "message": f"Created folder {target.name}"}
+    except Exception as e:
+        logger.exception(f"Error creating folder: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/browse")
+def delete_folder_or_file(path: str, index: LibraryIndex = Depends(get_index)):
+    """Delete a folder or file from /media."""
+    import shutil
+    
+    if not path:
+        raise HTTPException(status_code=400, detail="Cannot delete /media root")
+    
+    base_path = Path("/media")
+    target = base_path / path
+    
+    # If doesn't exist, treat as success (idempotent)
+    if not target.exists():
+        return {"success": True, "message": "Already deleted"}
+    
+    try:
+        if target.is_dir():
+            shutil.rmtree(target)
+            return {"success": True, "message": f"Deleted folder {target.name}"}
+        else:
+            target.unlink()
+            return {"success": True, "message": f"Deleted file {target.name}"}
+    except Exception as e:
+        logger.exception(f"Error deleting {target}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 def move_video(video_id: str, payload: MoveVideoPayload, index: LibraryIndex = Depends(get_index)):
     try:
         result = index.move_video(video_id, payload.target_source_id, payload.target_rel_path)

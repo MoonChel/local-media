@@ -4,32 +4,27 @@ import { ref, watch } from 'vue'
 const props = defineProps({
   show: Boolean,
   videoName: String,
-  sources: Array,
-  initialSource: String,
   initialPath: String
 })
 
 const emit = defineEmits(['close', 'submit'])
 
-const targetSource = ref('')
 const targetPath = ref('')
 const moving = ref(false)
 
 watch(() => props.show, (newVal) => {
   if (newVal) {
-    targetSource.value = props.initialSource || ''
     targetPath.value = props.initialPath || ''
     moving.value = false
   }
 })
 
 async function handleSubmit() {
-  if (!targetSource.value || !targetPath.value) return
+  if (!targetPath.value) return
   
   moving.value = true
   try {
     await emit('submit', {
-      targetSource: targetSource.value,
       targetPath: targetPath.value
     })
   } finally {
@@ -46,15 +41,8 @@ async function handleSubmit() {
       
       <div class="space-y-3">
         <div>
-          <label class="mb-1 block text-sm text-muted">Target Folder</label>
-          <select v-model="targetSource" class="w-full rounded border border-white/20 bg-black/30 px-3 py-2 text-sm">
-            <option v-for="s in sources" :key="s.id" :value="s.id">{{ s.label }}</option>
-          </select>
-        </div>
-        
-        <div>
-          <label class="mb-1 block text-sm text-muted">New Path (relative)</label>
-          <input v-model="targetPath" type="text" placeholder="folder/video.mp4" class="w-full rounded border border-white/20 bg-black/30 px-3 py-2 text-sm" />
+          <label class="mb-1 block text-sm text-muted">New Path (relative to /media)</label>
+          <input v-model="targetPath" type="text" placeholder="videos/folder/video.mp4" class="w-full rounded border border-white/20 bg-black/30 px-3 py-2 text-sm" />
         </div>
       </div>
       

@@ -9,6 +9,9 @@ library:
   - id: videos
     label: Videos
     path: /media/videos
+  - id: test
+    label: test
+    path: /media/test
   extensions:
   - .mp4
   - .mkv
@@ -16,10 +19,8 @@ library:
   - .mov
   - .webm
   scan_interval_seconds: 21600
-
 player:
   seek_time: 5
-
 modules:
   torrents: true
   youtube: true
