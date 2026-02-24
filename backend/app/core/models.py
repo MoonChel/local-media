@@ -118,6 +118,33 @@ class YouTubeDownload(Base):
         }
 
 
+class VideoTrack(Base):
+    __tablename__ = "video_tracks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    video_id = Column(String, ForeignKey("videos.id", ondelete="CASCADE"), nullable=False, index=True)
+    track_type = Column(String, nullable=False)  # 'audio' or 'subtitle'
+    track_index = Column(Integer, nullable=False)  # Index in original file
+    language = Column(String, nullable=False)  # Language code (e.g., 'eng', 'rus', 'und')
+    title = Column(String)  # Optional track title
+    codec = Column(String)  # Codec name
+    file_path = Column(String, nullable=False)  # Path to extracted file
+    is_default = Column(Integer, default=0)  # 1 if default track, 0 otherwise
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "video_id": self.video_id,
+            "track_type": self.track_type,
+            "track_index": self.track_index,
+            "language": self.language,
+            "title": self.title,
+            "codec": self.codec,
+            "file_path": self.file_path,
+            "is_default": bool(self.is_default),
+        }
+
+
 def get_engine(db_path: str):
     """Create SQLAlchemy engine"""
     return create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})

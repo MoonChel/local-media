@@ -6,9 +6,11 @@ import MoveDialog from '../components/MoveDialog.vue'
 import AddFolderDialog from '../components/AddFolderDialog.vue'
 import UploadProgress from '../components/UploadProgress.vue'
 import Breadcrumbs from '../components/Breadcrumbs.vue'
+import { useNotification } from '../composables/useNotification'
 
 const route = useRoute()
 const router = useRouter()
+const { showNotification } = useNotification()
 
 const videos = ref([])
 const sources = ref([])
@@ -32,6 +34,8 @@ const uploadProgress = ref([])
 
 const selectionMode = ref(false)
 const selectedVideos = ref(new Set())
+const convertingVideos = ref(new Set())
+const showBulkActionsMenu = ref(false)
 
 function normalizePath(value) {
   return String(value || '')
@@ -187,7 +191,16 @@ function goUp() {
 
 watch(() => route.query, applyQueryState)
 
-onMounted(loadLibrary)
+onMounted(() => {
+  loadLibrary()
+  
+  // Close dropdown when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.relative')) {
+      showBulkActionsMenu.value = false
+    }
+  })
+})
 
 async function deleteVideo(videoId, videoName) {
   if (!confirm(`Delete "${videoName}"?`)) return
@@ -198,6 +211,26 @@ async function deleteVideo(videoId, videoName) {
     await loadLibrary()
   } catch (e) {
     error.value = String(e)
+  }
+}
+
+async function convertVideo(video) {
+  convertingVideos.value.add(video.id)
+  
+  try {
+    const res = await fetch(`/api/videos/${video.id}/convert`, { method: 'POST' })
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(text || `Failed: ${res.status}`)
+    }
+    const result = await res.json()
+    
+    showNotification(result.message + '\n\nClick "Rescan" to see the HLS version.', 'success')
+  } catch (e) {
+    error.value = String(e)
+    showNotification(`Conversion failed: ${e}`, 'error')
+  } finally {
+    convertingVideos.value.delete(video.id)
   }
 }
 
@@ -309,6 +342,30 @@ function bulkMove() {
   moveInitialSource.value = firstVideo.source_id
   moveInitialPath.value = firstVideo.rel_path
   showMoveDialog.value = true
+}
+
+async function bulkConvert() {
+  if (selectedVideos.value.size === 0) return
+  
+  const videosToConvert = displayedVideos.value.filter(v => 
+    selectedVideos.value.has(v.id) && 
+    v.rel_path && 
+    v.rel_path.match(/\.(mkv|avi|wmv|flv|mov|m4v)$/i)
+  )
+  
+  if (videosToConvert.length === 0) {
+    showNotification('No convertible videos selected (MKV/AVI/WMV/FLV/MOV/M4V)', 'error')
+    return
+  }
+  
+  showNotification(`Converting ${videosToConvert.length} video(s)...`, 'info')
+  
+  for (const video of videosToConvert) {
+    await convertVideo(video)
+  }
+  
+  selectedVideos.value.clear()
+  selectionMode.value = false
 }
 
 function handleDragOver(event) {
@@ -456,20 +513,42 @@ function removeUpload(idx) {
         <template v-else>
           <button @click="selectAll" class="rounded border border-white/20 px-3 py-2 text-sm font-medium hover:bg-white/5">Select All</button>
           <button @click="deselectAll" class="rounded border border-white/20 px-3 py-2 text-sm font-medium hover:bg-white/5">Deselect All</button>
-          <button 
-            @click="bulkMove" 
-            :disabled="selectedVideos.size === 0"
-            class="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
-          >
-            Move ({{ selectedVideos.size }})
-          </button>
-          <button 
-            @click="bulkDelete" 
-            :disabled="selectedVideos.size === 0"
-            class="rounded bg-red-600 px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
-          >
-            Delete ({{ selectedVideos.size }})
-          </button>
+          
+          <!-- Bulk Actions Dropdown -->
+          <div class="relative">
+            <button 
+              @click="showBulkActionsMenu = !showBulkActionsMenu"
+              :disabled="selectedVideos.size === 0"
+              class="rounded bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-40 flex items-center gap-1"
+            >
+              Actions ({{ selectedVideos.size }})
+              <span class="text-xs">▼</span>
+            </button>
+            <div 
+              v-if="showBulkActionsMenu && selectedVideos.size > 0"
+              class="absolute right-0 top-full mt-1 w-48 rounded border border-white/20 bg-black/95 shadow-lg z-10"
+            >
+              <button 
+                @click="bulkConvert(); showBulkActionsMenu = false" 
+                class="w-full px-4 py-2 text-left text-sm hover:bg-white/10 flex items-center gap-2"
+              >
+                <span class="text-green-400">▶</span> Convert to MP4
+              </button>
+              <button 
+                @click="bulkMove(); showBulkActionsMenu = false" 
+                class="w-full px-4 py-2 text-left text-sm hover:bg-white/10 flex items-center gap-2"
+              >
+                <span class="text-blue-400">→</span> Move
+              </button>
+              <button 
+                @click="bulkDelete(); showBulkActionsMenu = false" 
+                class="w-full px-4 py-2 text-left text-sm hover:bg-white/10 flex items-center gap-2 text-red-400"
+              >
+                <span>✕</span> Delete
+              </button>
+            </div>
+          </div>
+          
           <button @click="toggleSelectionMode" class="rounded border border-white/20 px-3 py-2 text-sm font-medium hover:bg-white/5">Cancel</button>
         </template>
         <button @click="showAddFolderDialog = true" class="rounded border border-white/20 px-3 py-2 text-sm font-medium hover:bg-white/5">+ Add Folder</button>
@@ -523,10 +602,12 @@ function removeUpload(idx) {
             :video="item"
             :selected="selectedVideos.has(item.id)"
             :selectionMode="selectionMode"
+            :converting="convertingVideos.has(item.id)"
             @play="openFile"
             @move="openMoveDialog"
             @delete="deleteVideo"
             @toggleSelect="toggleVideoSelection"
+            @convert="convertVideo"
           />
         </div>
       </div>
@@ -567,10 +648,12 @@ function removeUpload(idx) {
               :video="entry"
               :selected="selectedVideos.has(entry.id)"
               :selectionMode="selectionMode"
+              :converting="convertingVideos.has(entry.id)"
               @play="openFile"
               @move="openMoveDialog"
               @delete="deleteVideo"
               @toggleSelect="toggleVideoSelection"
+              @convert="convertVideo"
             />
           </div>
         </div>

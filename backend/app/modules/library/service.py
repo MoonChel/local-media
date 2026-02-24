@@ -26,7 +26,13 @@ class LibraryIndex:
         return hashlib.sha1(source).hexdigest()[:16]
 
     def _is_video(self, path: Path) -> bool:
-        return path.suffix.lower() in self.config.library.extensions
+        # Check for regular video files
+        if path.suffix.lower() in self.config.library.extensions:
+            return True
+        # Check for HLS master playlists
+        if path.name == 'master.m3u8':
+            return True
+        return False
 
     async def scan(self) -> None:
         async with self._scan_lock:

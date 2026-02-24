@@ -1,13 +1,15 @@
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from backend.app.core.dependencies import get_index, require_auth
 from backend.app.modules.library.service import LibraryIndex
 
 router = APIRouter(prefix="/api", tags=["videos"], dependencies=[Depends(require_auth)])
+logger = logging.getLogger(__name__)
 
 
 class ProgressPayload(BaseModel):
@@ -62,10 +64,7 @@ def put_progress(video_id: str, payload: ProgressPayload, index: LibraryIndex = 
 
 @router.get("/stream/{video_id}")
 async def stream_video(video_id: str, index: LibraryIndex = Depends(get_index)):
-    import logging
-    from backend.app.modules.library.transcoding import needs_transcoding, create_transcode_response
-    
-    logger = logging.getLogger(__name__)
+    """Stream video file directly (no transcoding)."""
     logger.info(f"Stream request for video_id: {video_id}")
     
     if not video_id or not isinstance(video_id, str):
@@ -87,10 +86,14 @@ async def stream_video(video_id: str, index: LibraryIndex = Depends(get_index)):
         logger.error(f"File missing: {file_path}")
         raise HTTPException(status_code=404, detail="File missing")
 
-    # Check if transcoding is needed
-    if needs_transcoding(file_path):
-        logger.info(f"Transcoding {file_path.name} on-the-fly (format: {file_path.suffix})")
-        return create_transcode_response(file_path)
+    # Check if format is directly playable
+    supported_formats = {'.mp4', '.webm', '.ogg', '.ogv'}
+    if file_path.suffix.lower() not in supported_formats:
+        logger.info(f"Unsupported format: {file_path.suffix}")
+        raise HTTPException(
+            status_code=415, 
+            detail=f"Format {file_path.suffix} not supported. Supported formats: MP4, WebM, OGG. Use Jellyfin for other formats."
+        )
     
     # Direct file response for supported formats
     logger.info(f"Direct streaming {file_path.name} (format: {file_path.suffix})")
@@ -104,9 +107,16 @@ def delete_video(video_id: str, index: LibraryIndex = Depends(get_index)):
         return {"ok": True}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.post("/videos/{video_id}/move")
+def move_video(video_id: str, payload: MoveVideoPayload, index: LibraryIndex = Depends(get_index)):
+    try:
+        result = index.move_video(video_id, payload.target_source_id, payload.target_rel_path)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 def move_video(video_id: str, payload: MoveVideoPayload, index: LibraryIndex = Depends(get_index)):
     try:
         result = index.move_video(video_id, payload.target_source_id, payload.target_rel_path)
