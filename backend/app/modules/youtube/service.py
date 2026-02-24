@@ -253,6 +253,10 @@ class YouTubeDownloadManager:
                         recent_videos = sorted(source_videos, key=lambda v: v.get('mtime', 0), reverse=True)[:3]
                         logger.info(f"Job {job_id} most recent titles: {[v['title'] for v in recent_videos]}")
             
+            # Trigger a library scan to index the downloaded video
+            logger.info(f"Job {job_id} triggering library scan")
+            self.scheduler.trigger_scan()
+            
             update_download(status='done', error=None, progress_percent=100, video_id=video_id)
 
         except asyncio.CancelledError:

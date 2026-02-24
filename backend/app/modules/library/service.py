@@ -271,12 +271,13 @@ async def run_file_watcher(config: AppConfig, scheduler: ScanScheduler):
     except Exception:
         return
 
-    roots = [src.path for src in config.library.sources if Path(src.path).exists()]
-    if not roots:
+    # Watch /media directory directly
+    media_path = Path("/media")
+    if not media_path.exists():
         return
 
     ignore_suffixes = (".part", ".!qB", ".tmp", ".crdownload")
-    async for changes in awatch(*roots, recursive=True):
+    async for changes in awatch(str(media_path), recursive=True):
         should_scan = False
         for _, changed_path in changes:
             if changed_path.endswith(ignore_suffixes):
