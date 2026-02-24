@@ -212,7 +212,7 @@ class YouTubeDownloadManager:
             
             if video_title:
                 # Find video by title in the target source
-                from .library import LibraryIndex
+                from backend.app.modules.library.service import LibraryIndex
                 index = LibraryIndex(self.config, self.session_maker)
                 videos = index.list_videos()
                 
