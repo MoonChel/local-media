@@ -39,42 +39,51 @@ class LibraryIndex:
             session: Session = self.session_maker()
             try:
                 seen = set()
-                for source in self.config.library.sources:
-                    root_path = Path(source.path)
-                    if not root_path.exists():
+                
+                # Scan /media directory directly
+                media_root = Path("/media")
+                if not media_root.exists():
+                    session.commit()
+                    return
+                
+                for file_path in media_root.rglob("*"):
+                    if not file_path.is_file() or not self._is_video(file_path):
                         continue
 
-                    for file_path in root_path.rglob("*"):
-                        if not file_path.is_file() or not self._is_video(file_path):
-                            continue
+                    # Get relative path from /media
+                    rel_path = str(file_path.relative_to(media_root))
+                    
+                    # Use the first folder as source_id, or "media" if at root
+                    parts = rel_path.split('/')
+                    source_id = parts[0] if len(parts) > 1 else "media"
+                    source_label = source_id.replace('-', ' ').replace('_', ' ').title()
+                    
+                    vid = self.stable_id(source_id, rel_path)
+                    stat = file_path.stat()
+                    title = file_path.stem
 
-                        rel_path = str(file_path.relative_to(root_path))
-                        vid = self.stable_id(source.id, rel_path)
-                        stat = file_path.stat()
-                        title = file_path.stem
-
-                        # Upsert video
-                        video = session.query(Video).filter(Video.id == vid).first()
-                        if video:
-                            video.source_id = source.id
-                            video.source_label = source.label
-                            video.abs_path = str(file_path)
-                            video.title = title
-                            video.size = stat.st_size
-                            video.mtime = stat.st_mtime
-                        else:
-                            video = Video(
-                                id=vid,
-                                source_id=source.id,
-                                source_label=source.label,
-                                rel_path=rel_path,
-                                abs_path=str(file_path),
-                                title=title,
-                                size=stat.st_size,
-                                mtime=stat.st_mtime,
-                            )
-                            session.add(video)
-                        seen.add(vid)
+                    # Upsert video
+                    video = session.query(Video).filter(Video.id == vid).first()
+                    if video:
+                        video.source_id = source_id
+                        video.source_label = source_label
+                        video.abs_path = str(file_path)
+                        video.title = title
+                        video.size = stat.st_size
+                        video.mtime = stat.st_mtime
+                    else:
+                        video = Video(
+                            id=vid,
+                            source_id=source_id,
+                            source_label=source_label,
+                            rel_path=rel_path,
+                            abs_path=str(file_path),
+                            title=title,
+                            size=stat.st_size,
+                            mtime=stat.st_mtime,
+                        )
+                        session.add(video)
+                    seen.add(vid)
 
                 # Delete videos not seen
                 if seen:
