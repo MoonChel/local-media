@@ -134,6 +134,7 @@ onBeforeUnmount(() => {
           <thead class="text-muted">
             <tr>
               <th class="py-1 pr-3">Name</th>
+              <th class="py-1 pr-3">URL</th>
               <th class="py-1 pr-3">Status</th>
               <th class="py-1 pr-3">Progress</th>
               <th class="py-1 pr-3">Folder</th>
@@ -142,18 +143,29 @@ onBeforeUnmount(() => {
             </tr>
           </thead>
           <tbody>
-            <tr v-if="jobsLoading"><td colspan="6" class="py-2 text-muted">Loading jobs...</td></tr>
-            <tr v-else-if="jobs.length === 0"><td colspan="6" class="py-2 text-muted">No jobs</td></tr>
+            <tr v-if="jobsLoading"><td colspan="7" class="py-2 text-muted">Loading jobs...</td></tr>
+            <tr v-else-if="jobs.length === 0"><td colspan="7" class="py-2 text-muted">No jobs</td></tr>
             <tr v-for="job in jobs" :key="job.id" class="border-t border-white/10">
-              <td class="max-w-[300px] truncate py-2 pr-3" :title="job.display_name || job.url">
+              <td class="max-w-[250px] truncate py-2 pr-3" :title="job.display_name || 'Untitled'">
                 <RouterLink 
                   v-if="job.video_id && job.status === 'done'" 
                   :to="`/watch/${job.video_id}`"
                   class="text-accent hover:underline"
                 >
-                  {{ job.display_name || job.url }}
+                  {{ job.display_name || 'Untitled' }}
                 </RouterLink>
-                <span v-else>{{ job.display_name || job.url }}</span>
+                <span v-else>{{ job.display_name || 'Untitled' }}</span>
+              </td>
+              <td class="max-w-[200px] truncate py-2 pr-3">
+                <a 
+                  :href="job.url" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  class="text-blue-400 hover:underline text-xs"
+                  :title="job.url"
+                >
+                  {{ job.url }}
+                </a>
               </td>
               <td class="py-2 pr-3">
                 <span :class="{
@@ -163,6 +175,9 @@ onBeforeUnmount(() => {
                 }">
                   {{ job.status }}
                 </span>
+                <div v-if="job.error" class="text-xs text-red-400 max-w-[200px] truncate" :title="job.error">
+                  {{ job.error }}
+                </div>
               </td>
               <td class="py-2 pr-3">
                 <div v-if="job.status === 'downloading' && job.progress_percent != null" class="flex items-center gap-2 min-w-[120px]">
@@ -176,7 +191,14 @@ onBeforeUnmount(() => {
                 </div>
                 <span v-else class="text-muted">—</span>
               </td>
-              <td class="py-2 pr-3">{{ job.source_label || job.source_id }}</td>
+              <td class="py-2 pr-3">
+                <RouterLink 
+                  :to="`/?path=${encodeURIComponent(job.source_id)}`"
+                  class="text-blue-400 hover:underline text-xs"
+                >
+                  {{ job.source_label || job.source_id }}
+                </RouterLink>
+              </td>
               <td class="py-2 pr-3 text-xs text-muted">{{ new Date(job.updated_at).toLocaleString() }}</td>
               <td class="py-2 pr-3">
                 <div class="flex items-center gap-1">
@@ -184,24 +206,24 @@ onBeforeUnmount(() => {
                     v-if="job.status === 'done' && job.video_id"
                     @click="$router.push(`/watch/${job.video_id}`)"
                     class="rounded border border-accent/50 px-2 py-1 text-xs text-accent hover:bg-accent/20"
-                    title="Watch"
+                    title="Watch video"
                   >
-                    Watch
+                    ▶
                   </button>
                   <button 
                     v-if="job.status === 'failed'"
                     @click="retryJob(job.id)"
                     class="rounded border border-yellow-500/50 px-2 py-1 text-xs text-yellow-300 hover:bg-yellow-500/20"
-                    title="Retry"
+                    title="Retry download"
                   >
-                    Retry
+                    ↻
                   </button>
                   <button 
                     @click="deleteJob(job.id)"
                     class="rounded border border-red-500/50 px-2 py-1 text-xs text-red-300 hover:bg-red-500/20"
-                    title="Delete"
+                    title="Delete job"
                   >
-                    Delete
+                    ✕
                   </button>
                 </div>
               </td>
