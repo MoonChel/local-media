@@ -255,7 +255,7 @@ class YouTubeDownloadManager:
             
             # Trigger a library scan to index the downloaded video
             logger.info(f"Job {job_id} triggering library scan")
-            self.scheduler.trigger_scan()
+            self.scheduler.trigger()
             
             update_download(status='done', error=None, progress_percent=100, video_id=video_id)
 

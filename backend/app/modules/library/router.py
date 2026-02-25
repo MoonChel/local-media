@@ -73,21 +73,13 @@ def browse_filesystem(path: str = "", index: LibraryIndex = Depends(get_index)):
             elif item.is_file():
                 rel_path = str(item.relative_to(base_path))
                 
-                # Try to find video in index by checking all sources
-                video = None
-                video_id = None
-                for source in index.config.library.sources:
-                    source_base = Path(source.path)
-                    try:
-                        # Check if this file belongs to this source
-                        file_rel_to_source = str(item.relative_to(source_base))
-                        video_id = index.stable_id(source.id, file_rel_to_source)
-                        video = index.get_video(video_id)
-                        if video:
-                            break
-                    except ValueError:
-                        # File not in this source
-                        continue
+                # Calculate video ID using the same logic as scan()
+                parts = rel_path.split('/')
+                source_id = parts[0] if len(parts) > 1 else "media"
+                video_id = index.stable_id(source_id, rel_path)
+                
+                # Try to find video in index
+                video = index.get_video(video_id)
                 
                 if video:
                     files.append({
