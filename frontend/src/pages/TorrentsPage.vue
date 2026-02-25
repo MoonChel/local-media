@@ -14,14 +14,14 @@ const uploading = ref(false)
 const actionInProgress = ref({})
 let jobsInterval = null
 
-async function loadJobs() {
-  jobsLoading.value = true
+async function loadJobs(silent = false) {
+  if (!silent) jobsLoading.value = true
   try {
     const res = await fetch('/api/torrents')
     if (!res.ok) throw new Error(`Downloads failed: ${res.status}`)
     jobs.value = await res.json()
   } catch (e) {
-    error.value = String(e)
+    if (!silent) error.value = String(e)
   } finally {
     jobsLoading.value = false
   }
@@ -104,7 +104,7 @@ async function deleteJob(jobId) {
 
 onMounted(async () => {
   await loadJobs()
-  jobsInterval = setInterval(loadJobs, 5000)
+  jobsInterval = setInterval(() => loadJobs(true), 5000)
 })
 
 onBeforeUnmount(() => {
@@ -152,7 +152,7 @@ onBeforeUnmount(() => {
           <tbody>
             <tr v-if="jobsLoading"><td colspan="6" class="py-2 text-muted">Loading jobs...</td></tr>
             <tr v-else-if="jobs.length === 0"><td colspan="6" class="py-2 text-muted">No jobs</td></tr>
-            <tr v-for="job in jobs" :key="job.id" class="border-t border-white/10">
+            <tr v-for="job in jobs" :key="job.id" class="border-t border-white/10 transition-all duration-200">
               <td class="max-w-[300px] truncate py-2 pr-3" :title="job.display_name || job.source_value">
                 {{ job.display_name || job.source_value }}
               </td>
