@@ -126,14 +126,7 @@ class YouTubeDownloadManager:
 
             # Restart the download task
             url = download.url
-            source_id = download.source_id
-
-            # Find target directory
-            source = next((s for s in self.config.library.sources if s.id == source_id), None)
-            if not source:
-                raise ValueError(f"Source {source_id} not found")
-
-            target_dir = source.path
+            target_dir = download.target_dir
 
             # Start the download task
             task = asyncio.create_task(self._run_job(job_id, url, target_dir))
