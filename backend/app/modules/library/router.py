@@ -180,6 +180,51 @@ def delete_video(video_id: str, index: LibraryIndex = Depends(get_index)):
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 
+@router.post("/videos/{video_id}/convert-ios")
+async def convert_video_for_ios(video_id: str, index: LibraryIndex = Depends(get_index)):
+    """Re-encode video to H.264+AAC MP4 for iOS compatibility."""
+    import subprocess
+    
+    video = index.get_video(video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    source_path = Path(video["abs_path"])
+    if not source_path.exists():
+        raise HTTPException(status_code=404, detail="Video file not found")
+    
+    # Create iOS-compatible output file
+    output_path = source_path.parent / f"{source_path.stem}_ios.mp4"
+    
+    if output_path.exists():
+        return {"message": "iOS-compatible version already exists", "output_path": str(output_path)}
+    
+    try:
+        # Re-encode to H.264+AAC with iOS-compatible settings
+        cmd = [
+            "ffmpeg", "-i", str(source_path),
+            "-c:v", "libx264",
+            "-preset", "medium",
+            "-crf", "23",
+            "-profile:v", "high",
+            "-level", "4.0",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac",
+            "-b:a", "128k",
+            "-movflags", "+faststart",
+            "-y",
+            str(output_path)
+        ]
+        
+        # Run in background
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        return {"message": "iOS conversion started in background. The file will appear as '{filename}_ios.mp4' when complete.", "output_path": str(output_path)}
+    except Exception as e:
+        logger.exception(f"iOS conversion error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/videos/{video_id}/move")
 def move_video(video_id: str, payload: MoveVideoPayload, index: LibraryIndex = Depends(get_index)):
     try:

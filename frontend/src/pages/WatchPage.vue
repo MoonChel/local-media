@@ -41,6 +41,7 @@ const breadcrumbs = computed(() => {
 })
 
 const canGoUp = computed(() => breadcrumbs.value.length > 0)
+const converting = ref(false)
 
 function goUp() {
   if (breadcrumbs.value.length === 0) {
@@ -53,6 +54,28 @@ function goUp() {
 
 function navigateTo(crumb) {
   router.push(`/?source=${crumb.source}&path=${encodeURIComponent(crumb.path)}`)
+}
+
+async function convertForIOS() {
+  if (!videoId.value) return
+  
+  converting.value = true
+  error.value = ''
+  
+  try {
+    const res = await fetch(`/api/videos/${videoId.value}/convert-ios`, { method: 'POST' })
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(text || `Failed: ${res.status}`)
+    }
+    const result = await res.json()
+    
+    alert(result.message + '\n\nThe iOS-compatible version will be available shortly. Refresh the page to see it.')
+  } catch (e) {
+    error.value = String(e)
+  } finally {
+    converting.value = false
+  }
 }
 
 function mimeTypeFromPath(path) {
@@ -364,6 +387,14 @@ onBeforeUnmount(() => {
           <h2 class="text-2xl font-semibold">{{ details.title }}</h2>
           <p class="text-xs text-muted">{{ details.source_label || details.source_id }} • {{ details.rel_path }}</p>
         </div>
+        <button 
+          @click="convertForIOS"
+          :disabled="converting"
+          class="rounded border border-accent/50 px-3 py-2 text-sm text-accent hover:bg-accent/20 disabled:opacity-50"
+          title="Re-encode video to H.264+AAC for iOS compatibility"
+        >
+          {{ converting ? 'Converting...' : '📱 Convert for iOS' }}
+        </button>
       </div>
       
       <div class="relative">
