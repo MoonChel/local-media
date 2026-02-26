@@ -131,7 +131,7 @@ async function loadVideo() {
         nativeTextTracks: false,  // Use Video.js text tracks
         nativeAudioTracks: false,  // Use Video.js audio tracks
         vhs: {
-          overrideNative: true,
+          overrideNative: !videojs.browser.IS_IOS,  // Use native HLS on iOS
           enableLowInitialPlaylist: true
         }
       },
@@ -367,7 +367,7 @@ onBeforeUnmount(() => {
       </div>
       
       <div class="relative">
-        <video ref="playerEl" class="video-js vjs-big-play-centered w-full rounded-lg border border-white/10 bg-black mb-8"></video>
+        <video ref="playerEl" class="video-js vjs-big-play-centered w-full rounded-lg border border-white/10 bg-black mb-8" playsinline webkit-playsinline></video>
       </div>
     </div>
   </main>

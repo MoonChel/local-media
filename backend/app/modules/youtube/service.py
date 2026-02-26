@@ -178,7 +178,7 @@ class YouTubeDownloadManager:
 
             # yt-dlp options
             ydl_opts = {
-                'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                'format': 'bestvideo[ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
                 'outtmpl': f'{target_dir}/%(title)s.%(ext)s',
                 'progress_hooks': [progress_hook],
                 'quiet': False,
