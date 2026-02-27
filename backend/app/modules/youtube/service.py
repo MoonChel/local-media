@@ -176,13 +176,14 @@ class YouTubeDownloadManager:
                 elif d['status'] == 'finished':
                     logger.info(f"Job {job_id} download finished, processing...")
 
-            # yt-dlp options
+            # yt-dlp options - force H.264 High profile + AAC for iOS compatibility
             ydl_opts = {
-                'format': 'bestvideo[ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                'format': 'bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/best[vcodec^=avc1]/best',
                 'outtmpl': f'{target_dir}/%(title)s.%(ext)s',
                 'progress_hooks': [progress_hook],
                 'quiet': False,
                 'no_warnings': False,
+                'merge_output_format': 'mp4',
             }
 
             # Download video
