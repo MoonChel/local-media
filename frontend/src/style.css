@@ -32,6 +32,19 @@ button {
   line-height: 1.65;
 }
 
+/* Responsive control bar sizing */
 .vjs-control-bar { 
-  font-size: 200% 
+  font-size: 100%;
+}
+
+@media (min-width: 768px) {
+  .vjs-control-bar { 
+    font-size: 150%;
+  }
+}
+
+@media (min-width: 1024px) {
+  .vjs-control-bar { 
+    font-size: 200%;
+  }
 }
